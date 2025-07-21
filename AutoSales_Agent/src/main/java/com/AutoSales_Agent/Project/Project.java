@@ -1,4 +1,4 @@
-package com.AutoSales_Agent;
+package com.AutoSales_Agent.Project;
 
 import java.time.LocalDateTime;
 
