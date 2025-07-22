@@ -14,6 +14,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.AutoSales_Agent.Lead.Lead;
+
 import lombok.RequiredArgsConstructor;
 
 @RestController
@@ -46,11 +48,23 @@ public class ProjectController {
 		return ResponseEntity.ok(this.projectService.findById(id));
 	}
 	
+	@GetMapping("/lead/{leadId}/projects")
+	public ResponseEntity<List<Project>> getProjectsByLead(@PathVariable Integer leadId) {
+	    List<Project> projects = projectService.getProjectsByLeadId(leadId);
+	    return ResponseEntity.ok(projects);
+	}
+	
 	@PostMapping("")
 	public ResponseEntity<Project> createProject(@RequestBody ProjectDto projectDto){
 		Project project=this.projectService.save(projectDto);
 		return ResponseEntity.ok(project);
 	}
+	
+    @PostMapping("/{projectId}/auto-connect")
+    public ResponseEntity<List<Lead>> autoConnectLeads(@PathVariable Integer projectId) {
+        List<Lead> leads = projectService.autoConnectLeads(projectId);
+        return ResponseEntity.ok(leads);
+    }
 	
 	@PutMapping("/{id}")
 	public ResponseEntity<Project> updateProject(

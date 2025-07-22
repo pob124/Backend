@@ -50,6 +50,13 @@ public class LeadController {
         return ResponseEntity.ok(leadService.findById(id));
     }
 	
+	@GetMapping("/project/{projectId}/leads")
+	public ResponseEntity<List<Lead>> getLeadsByProject(@PathVariable Integer projectId) {
+	    List<Lead> leads = leadService.getLeadsByProjectId(projectId);
+	    return ResponseEntity.ok(leads);
+	}
+
+	
 	@PostMapping("")
 	public ResponseEntity<Lead> createLead(@RequestBody LeadDto leadDto) {
 	    Lead lead = leadService.save(leadDto);
