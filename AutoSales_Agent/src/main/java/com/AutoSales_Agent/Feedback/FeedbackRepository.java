@@ -6,5 +6,5 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface FeedbackRepository extends JpaRepository<Feedback,Integer>{
 
-	Optional<Feedback> findFirstByEmailIdOrderByCreatedAtDesc(Integer emailId);
+	Optional<Feedback> findFirstByMail_IdOrderByCreatedAtDesc(Integer emailId);
 }

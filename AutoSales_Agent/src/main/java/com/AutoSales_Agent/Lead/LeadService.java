@@ -56,13 +56,13 @@ public class LeadService {
 	        .orElseThrow(() -> new RuntimeException("기업이 없습니다"));
 
 	    // 필요한 필드만 업데이트
-	    if (updates.containsKey("company_name")) {
+	    if (updates.containsKey("name")) {
 	        lead.setName((String) updates.get("name"));
 	    }
 	    if (updates.containsKey("industry")) {
 	        lead.setIndustry((String) updates.get("industry"));
 	    }
-	    if (updates.containsKey("contact_email")) {
+	    if (updates.containsKey("contactEmail")) {
 	        lead.setContactEmail((String) updates.get("contactEmail"));
 	    }
 	    if (updates.containsKey("language")) {

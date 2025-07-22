@@ -23,7 +23,7 @@ public class FeedbackService {
 	private final EmailRepository emailRepository;
 
 	public Optional<Feedback> getLatestFeedbackByEmailId(Integer emailId) {
-	    return feedbackRepository.findFirstByEmailIdOrderByCreatedAtDesc(emailId);
+	    return feedbackRepository.findFirstByMail_IdOrderByCreatedAtDesc(emailId);
 	}
 	
 	public Feedback saveFeedback(FeedbackDto dto) {
