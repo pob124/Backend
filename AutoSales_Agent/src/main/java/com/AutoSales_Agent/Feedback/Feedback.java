@@ -1,9 +1,10 @@
-package com.AutoSales_Agent;
+package com.AutoSales_Agent.Feedback;
 
 import java.time.LocalDateTime;
 
 import org.hibernate.annotations.CreationTimestamp;
 
+import com.AutoSales_Agent.Emai.Email;
 import com.AutoSales_Agent.Lead.Lead;
 import com.AutoSales_Agent.Project.Project;
 
@@ -26,23 +27,23 @@ public class Feedback {
 	private Integer id;
 	
 	@ManyToOne
-	private Project project_id;
+	private Project project;
 	
 	@ManyToOne
-	private Lead lead_id;
+	private Lead lead;
 	
 	@ManyToOne
-	private Email mail_id;
+	private Email mail;
 	
-	private String response_summary;
-	public enum response_type{
+	private String responseSummary;
+	public enum responseType{
         positive, neutral, negative
     }; 
     
     @Enumerated(EnumType.STRING)
-    private response_type response_type;
+    private responseType response_type;
     
     @Column(updatable = false)
 	@CreationTimestamp
-    private LocalDateTime created_at;
+    private LocalDateTime createdAt;
 }
