@@ -19,10 +19,10 @@ public class ProjectLeadMap {
 	private Integer id;
 	
 	@ManyToOne
-	private Project project_id;
+	private Project project;
 	
 	@ManyToOne
-	private Lead lead_id;
+	private Lead lead;
 	
-	private LocalDateTime created_at;
+	private LocalDateTime createdAt;
 }
