@@ -25,5 +25,5 @@ public class Project {
 	
 	@Column(updatable = false)
 	@CreationTimestamp
-	private LocalDateTime created_at;
+	private LocalDateTime createdAt;
 }
