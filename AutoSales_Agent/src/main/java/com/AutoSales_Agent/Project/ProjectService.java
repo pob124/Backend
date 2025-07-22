@@ -48,7 +48,7 @@ public class ProjectService {
 		Project project=new Project();
 		project.setName(projectDto.getName());
 		project.setDescription(projectDto.getDescription());
-		
+		project.setIndustry(projectDto.getIndustry());
 		return this.projectRepository.save(project);
 	}
 	
