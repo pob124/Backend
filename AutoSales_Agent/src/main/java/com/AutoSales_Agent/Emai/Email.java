@@ -1,4 +1,4 @@
-package com.AutoSales_Agent;
+package com.AutoSales_Agent.Emai;
 
 import java.time.LocalDateTime;
 
@@ -24,15 +24,15 @@ public class Email {
 	private Integer id;
 	
 	@ManyToOne
-	private Project project_id;
+	private Project project;
 	
 	@ManyToOne
-	private Lead lead_id;
+	private Lead lead;
 	
 	private String subject;
 	private String body;
 	
 	@Column(updatable = false)
 	@CreationTimestamp
-	private LocalDateTime created_at;
+	private LocalDateTime createdAt;
 }
