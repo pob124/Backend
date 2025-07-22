@@ -23,6 +23,8 @@ public class Project {
 	
 	private String description;
 	
+	private String industry;
+	
 	@Column(updatable = false)
 	@CreationTimestamp
 	private LocalDateTime createdAt;

@@ -2,10 +2,13 @@ package com.AutoSales_Agent.Lead;
 
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
 
 import com.AutoSales_Agent.Lead.Lead.Language;
+import com.AutoSales_Agent.ProjectLeadMap.ProjectLeadMap;
+import com.AutoSales_Agent.ProjectLeadMap.ProjectLeadMapRepository;
 
 import lombok.RequiredArgsConstructor;
 
@@ -14,6 +17,7 @@ import lombok.RequiredArgsConstructor;
 public class LeadService {
 	
 	private final LeadRepository leadRepository;
+	private final ProjectLeadMapRepository projectLeadMapRepository;
 	
     public List<Lead> findAll() {
         return this.leadRepository.findAll();
@@ -80,5 +84,13 @@ public class LeadService {
 		        .orElseThrow(() -> new RuntimeException("해당 기업을 찾을 수 없습니다."));
 		this.leadRepository.deleteById(id);
 		return target;
+	}
+	
+	public List<Lead> getLeadsByProjectId(Integer projectId) {
+	    List<ProjectLeadMap> mappings = projectLeadMapRepository.findByProjectId(projectId);
+	    return mappings.stream()
+	            .map(ProjectLeadMap::getLead)
+	            .distinct()
+	            .collect(Collectors.toList());
 	}
 }
