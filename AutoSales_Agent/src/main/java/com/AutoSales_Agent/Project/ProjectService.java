@@ -1,9 +1,16 @@
 package com.AutoSales_Agent.Project;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
+
+import com.AutoSales_Agent.Lead.Lead;
+import com.AutoSales_Agent.Lead.LeadRepository;
+import com.AutoSales_Agent.ProjectLeadMap.ProjectLeadMap;
+import com.AutoSales_Agent.ProjectLeadMap.ProjectLeadMapRepository;
 
 import lombok.RequiredArgsConstructor;
 
@@ -12,6 +19,8 @@ import lombok.RequiredArgsConstructor;
 public class ProjectService {
 
 	private final ProjectRepository projectRepository;
+	private final ProjectLeadMapRepository projectLeadMapRepository;
+	private final LeadRepository leadRepository;
 	
 	public List<Project> findAll(){
 		return this.projectRepository.findAll();
@@ -42,6 +51,25 @@ public class ProjectService {
 		
 		return this.projectRepository.save(project);
 	}
+	
+    public List<Lead> autoConnectLeads(Integer projectId) {
+        Project project = projectRepository.findById(projectId)
+            .orElseThrow(() -> new IllegalArgumentException("프로젝트 없음"));
+
+        String industry = project.getIndustry();
+        List<Lead> leads = leadRepository.findByIndustry(industry);
+
+        for (Lead lead : leads) {
+            if (!projectLeadMapRepository.existsByProjectIdAndLeadId(projectId, lead.getId())) {
+                ProjectLeadMap map = new ProjectLeadMap();
+                map.setProject(project);
+                map.setLead(lead);
+                map.setCreatedAt(LocalDateTime.now());
+                projectLeadMapRepository.save(map);
+            }
+        }
+        return leads;
+    }
 
 	public Project update(Integer id, Map<String, Object> updates) {
 		
@@ -65,4 +93,11 @@ public class ProjectService {
 		return target;
 	}
 	
+	public List<Project> getProjectsByLeadId(Integer leadId) {
+	    List<ProjectLeadMap> mappings = projectLeadMapRepository.findByLeadId(leadId);
+	    return mappings.stream()
+	            .map(ProjectLeadMap::getProject)
+	            .distinct()
+	            .collect(Collectors.toList());
+	}
 }
