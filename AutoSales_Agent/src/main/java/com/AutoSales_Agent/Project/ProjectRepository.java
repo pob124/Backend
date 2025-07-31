@@ -12,4 +12,6 @@ public interface ProjectRepository extends JpaRepository<Project,Integer>{
 	List<Project> findAllByNameContaining(String name);
 	List<Project> findAll();
 	Optional<Project> findById(Integer id);
+	
+	Optional<Project> findByName(String name);
 }

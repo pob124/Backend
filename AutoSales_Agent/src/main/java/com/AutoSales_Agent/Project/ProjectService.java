@@ -1,6 +1,7 @@
 package com.AutoSales_Agent.Project;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -69,6 +70,33 @@ public class ProjectService {
             }
         }
         return leads;
+    }
+    
+    public List<Lead> autoConnectLeadsByProjectName(String projectName) {
+        Project project = projectRepository.findByName(projectName)
+            .orElseThrow(() -> new IllegalArgumentException("해당 이름의 프로젝트가 존재하지 않습니다: " + projectName));
+        return autoConnectLeads(project.getId());
+    }
+    
+    public List<Lead> connectLeadsByName(String projectName, List<String> leadNames) {
+        Project project = projectRepository.findByName(projectName)
+            .orElseThrow(() -> new IllegalArgumentException("해당 이름의 프로젝트가 존재하지 않습니다: " + projectName));
+
+        List<Lead> leads = leadRepository.findAllByNameIn(leadNames);
+        List<Lead> connected = new ArrayList<>();
+
+        for (Lead lead : leads) {
+            if (!projectLeadMapRepository.existsByProjectIdAndLeadId(project.getId(), lead.getId())) {
+                ProjectLeadMap map = new ProjectLeadMap();
+                map.setProject(project);
+                map.setLead(lead);
+                map.setCreatedAt(LocalDateTime.now());
+                projectLeadMapRepository.save(map);
+                connected.add(lead);
+            }
+        }
+
+        return connected;
     }
 
 	public Project update(Integer id, Map<String, Object> updates) {
