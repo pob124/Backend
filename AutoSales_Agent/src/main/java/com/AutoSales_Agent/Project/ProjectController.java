@@ -3,6 +3,7 @@ package com.AutoSales_Agent.Project;
 import java.util.List;
 import java.util.Map;
 
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -60,11 +61,47 @@ public class ProjectController {
 		return ResponseEntity.ok(project);
 	}
 	
-    @PostMapping("/{projectId}/auto-connect")
-    public ResponseEntity<List<Lead>> autoConnectLeads(@PathVariable Integer projectId) {
-        List<Lead> leads = projectService.autoConnectLeads(projectId);
-        return ResponseEntity.ok(leads);
-    }
+	@PostMapping("/{projectId}/auto-connect")
+	public ResponseEntity<List<Lead>> autoConnectLeads(@PathVariable Integer projectId) {
+	    try {
+	        List<Lead> leads = projectService.autoConnectLeads(projectId);
+	        return ResponseEntity.ok(leads);
+	    } catch (Exception e) {
+	        return ResponseEntity.badRequest().build();
+	    }
+	}
+	
+	@PostMapping("/auto-connect-by-name")
+	public ResponseEntity<?> autoConnectLeadsByProjectName(@RequestBody Map<String, String> body) {
+	    String name = body.get("projectName");
+	    if (name == null || name.trim().isEmpty()) {
+	        return ResponseEntity.badRequest().body("projectName 파라미터가 필요합니다.");
+	    }
+
+	    try {
+	        List<Lead> connectedLeads = projectService.autoConnectLeadsByProjectName(name);
+	        return ResponseEntity.ok(connectedLeads);
+	    } catch (IllegalArgumentException e) {
+	        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
+	    }
+	}
+	
+	@PostMapping("/auto-connect-by-name-with-leads")
+	public ResponseEntity<?> connectSpecificLeadsByProjectName(@RequestBody Map<String, Object> body) {
+	    String projectName = (String) body.get("projectName");
+	    List<String> leadNames = (List<String>) body.get("leadNames");
+
+	    if (projectName == null || leadNames == null || leadNames.isEmpty()) {
+	        return ResponseEntity.badRequest().body("projectName과 leadNames가 모두 필요합니다.");
+	    }
+
+	    try {
+	        List<Lead> connectedLeads = projectService.connectLeadsByName(projectName, leadNames);
+	        return ResponseEntity.ok(connectedLeads);
+	    } catch (IllegalArgumentException e) {
+	        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
+	    }
+	}
 	
 	@PutMapping("/{id}")
 	public ResponseEntity<Project> updateProject(
