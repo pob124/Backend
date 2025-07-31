@@ -6,7 +6,6 @@ import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
 
-import com.AutoSales_Agent.Lead.Lead.Language;
 import com.AutoSales_Agent.ProjectLeadMap.ProjectLeadMap;
 import com.AutoSales_Agent.ProjectLeadMap.ProjectLeadMapRepository;
 
@@ -47,6 +46,8 @@ public class LeadService {
 		lead.setIndustry(leadDto.getIndustry());
 		lead.setContactEmail(leadDto.getContactEmail());
 		lead.setLanguage(leadDto.getLanguage());
+		lead.setContactName(leadDto.getContactName());
+		lead.setSize(leadDto.getSize());
 		
 		return leadRepository.save(lead);
 	}

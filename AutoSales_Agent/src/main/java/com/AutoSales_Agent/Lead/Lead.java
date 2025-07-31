@@ -2,6 +2,7 @@ package com.AutoSales_Agent.Lead;
 
 import java.time.LocalDateTime;
 
+
 import org.hibernate.annotations.CreationTimestamp;
 
 import jakarta.persistence.Column;
@@ -27,6 +28,7 @@ public class Lead {
 	private String name;
 	private String industry;
 	private String size;
+	
 	@Enumerated(EnumType.STRING)
 	private Language language;
 	
@@ -38,7 +40,4 @@ public class Lead {
 	@CreationTimestamp
 	private LocalDateTime createdAt;
 	
-	public enum Language {
-	    KO, EN, JP;
-	}
 }

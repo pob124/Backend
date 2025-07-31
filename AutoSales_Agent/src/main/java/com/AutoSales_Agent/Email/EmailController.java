@@ -47,7 +47,7 @@ public class EmailController {
 	}
 	
 	@PostMapping("")
-	public ResponseEntity<Email> createEamil(@RequestBody EmailDto emailDto) {
+	public ResponseEntity<Email> createEmail(@RequestBody EmailDto emailDto) {
 		Email email=this.emailService.save(emailDto);
 		return ResponseEntity.ok(email);
 	}
