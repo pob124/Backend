@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>이메일 초안 목록</title>
+  <style>
+    body { font-family: sans-serif; padding: 20px; }
+    .email-card {
+      border: 1px solid #ccc;
+      padding: 15px;
+      margin-bottom: 10px;
+      border-radius: 8px;
+    }
+    .email-card h3 { margin: 0; }
+    .email-card p { margin: 5px 0; white-space: pre-line; }
+    .email-actions {
+      margin-top: 10px;
+    }
+    button {
+      margin-right: 10px;
+      padding: 5px 10px;
+    }
+  </style>
+</head>
+<body>
+  <h1>이메일 초안 목록</h1>
+
+  <div>
+    <label>Session ID: <input type="text" id="sessionIdInput" style="width: 400px;" /></label>
+    <button onclick="loadDrafts()">불러오기</button>
+    <button onclick="sendAll()">일괄 전송</button>
+  </div>
+
+  <div id="draftList" style="margin-top: 20px;"></div>
+
+  <script>
+    async function loadDrafts() {
+      const sessionId = document.getElementById('sessionIdInput').value.trim();
+      if (!sessionId) {
+        alert('Session ID를 입력하세요');
+        return;
+      }
+      const res = await fetch(`/emails/api/drafts?sessionId=${sessionId}`); 
+      const emails = await res.json();
+      const list = document.getElementById('draftList');
+      list.innerHTML = '';
+
+      emails.forEach((item) => {
+        const email = item.email;
+        const uuid = item.uuid;
+
+        const card = document.createElement('div');
+        card.className = 'email-card';
+        card.innerHTML = `
+          <h3>${email.subject}</h3>
+          <p><strong>To:</strong> ${email.contactEmail}</p>
+          <p>${email.body}</p>
+          <div class="email-actions">
+            <button onclick="sendEmail('${uuid}')">보내기</button>
+          </div>
+        `;
+        list.appendChild(card);
+      });
+    }
+
+    async function sendEmail(uuid) {
+      const res = await fetch(`/emails/send/${uuid}`, { method: 'POST' });
+      if (res.ok) alert('메일 전송 완료');
+      else alert('전송 실패');
+    }
+
+    async function sendAll() {
+      const sessionId = document.getElementById('sessionIdInput').value.trim();
+      if (!sessionId) {
+        alert('Session ID를 입력하세요');
+        return;
+      }
+      const res = await fetch(`/emails/send?sessionId=${sessionId}`, { method: 'POST' });
+      if (res.ok) alert('일괄 전송 완료');
+      else alert('전송 실패');
+    }
+
+    window.onload = () => {
+      const params = new URLSearchParams(window.location.search);
+      const sessionId = params.get('sessionId');
+      if (sessionId) {
+        document.getElementById('sessionIdInput').value = sessionId;
+        loadDrafts();
+      }
+    };
+  </script>
+</body>
+</html>

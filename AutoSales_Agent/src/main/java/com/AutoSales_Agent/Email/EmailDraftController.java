@@ -1,49 +1,55 @@
 package com.AutoSales_Agent.Email;
 
 import java.util.List;
+import java.util.Map;
 
 import org.springframework.http.ResponseEntity;
-import org.springframework.stereotype.Controller;
-import org.springframework.ui.Model;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 
-import jakarta.servlet.http.HttpSession;
 import lombok.RequiredArgsConstructor;
 
-@Controller
+@RestController
 @RequiredArgsConstructor
 @RequestMapping("/emails")
 public class EmailDraftController {
 	
-	private final EmailDraftStorage draftStorage;
+	private final EmailDraftRedisService emailDraftRedisService;
 	
-	@GetMapping("/drafts")
-	public String openDraftListUI(Model model,HttpSession session) {
-		List<EmailDto> emails = (List<EmailDto>) session.getAttribute("emails");
-		System.out.println("📦 draftList from session: " + emails);
-		System.out.println("📦 email count: " + (emails != null ? emails.size() : "null"));
-		
-		if (emails == null || emails.isEmpty()) {
-			emails = draftStorage.getStoredEmails();
-			if (emails != null && !emails.isEmpty()) {
-				session.setAttribute("emails", emails);
-				System.out.println("🔄 draftStorage에서 복원된 emails: " + emails.size());
-			}
-		}
-		
-	    model.addAttribute("emails", emails != null ? emails : List.of());
-	    return "draftList";
-	}
-
 	@PostMapping("/drafts")
-	public ResponseEntity<String> showDraftList(@RequestBody List<EmailDto> emails, HttpSession session) {
-		System.out.println("📨 POST /drafts 호출됨 - emails: " + emails.size());
-		System.out.println("📨 session ID: " + session.getId());
-		session.setAttribute("emails", emails);
-		draftStorage.storeEmails(emails);
-		return ResponseEntity.ok("success");
+	public ResponseEntity<Map<String, Object>> storeDrafts(@RequestBody List<EmailDto> emails) {
+		String sessionId = emailDraftRedisService.storeDrafts(emails);
+		return ResponseEntity.ok(Map.of("sessionId", sessionId));
 	}
+	
+	/*
+	 * @GetMapping("/drafts") public ResponseEntity<List<EmailDraftWithUuid>>
+	 * getDraftsBySession(@RequestParam("sessionId") String sessionId){ return
+	 * ResponseEntity.ok(emailDraftRedisService.getDrafts(sessionId)); }
+	 */
+	
+    @DeleteMapping("/draft/{uuid}")
+    public ResponseEntity<Void> deleteDraft(@PathVariable String uuid) {
+        emailDraftRedisService.deleteSingleDraft(uuid);
+        return ResponseEntity.ok().build();
+    }
+    
+    @DeleteMapping("/drafts")
+    public ResponseEntity<Void> deleteAllDraftsBySession(@RequestParam("sessionId") String sessionId){
+        emailDraftRedisService.deleteDraftsBySession(sessionId);
+        return ResponseEntity.ok().build();
+    }
+    
+    @GetMapping("/api/drafts")
+    public ResponseEntity<List<EmailDraftWithUuid>> getDraftsBySession(
+        @RequestParam("sessionId") String sessionId
+    ) {
+        return ResponseEntity.ok(emailDraftRedisService.getDrafts(sessionId));
+    }
 }
