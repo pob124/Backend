@@ -2,12 +2,17 @@ package com.AutoSales_Agent.Email;
 
 import java.util.List;
 
-import org.springframework.http.ResponseEntity;
+import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
 
+import com.AutoSales_Agent.Lead.Lead;
+import com.AutoSales_Agent.Lead.LeadRepository;
 import com.AutoSales_Agent.Lead.LeadService;
 import com.AutoSales_Agent.Project.ProjectService;
 
+import jakarta.mail.internet.MimeMessage;
+import jakarta.servlet.http.HttpSession;
 import lombok.RequiredArgsConstructor;
 
 @Service
@@ -17,6 +22,9 @@ public class EmailService {
 	private final EmailRepository emailRepository;
 	private final ProjectService projectService;
 	private final LeadService leadService;
+	private final LeadRepository leadRepository;
+	private final JavaMailSender mailSender;
+	private final EmailDraftStorage draftStorage;
 	
 	public List<Email> findAll(){
 		return this.emailRepository.findAll();
@@ -54,5 +62,38 @@ public class EmailService {
 	    } else {
 	        return emailRepository.findByLeadId(leadId);
 	    }
+	}
+	
+	//email전송
+	public void sendEmail(EmailDto dto, HttpSession session) {
+		String to;
+		if(dto.getContactEmail() != null) {
+			to = dto.getContactEmail();
+	    } else {
+	    	to = leadRepository.findById(dto.getLeadId())
+	    			.map(Lead::getContactEmail)
+	    			.orElseThrow(() -> new RuntimeException("리드의 이메일 주소를 찾을 수 없습니다."));
+	    }
+		
+		try {
+			MimeMessage message=mailSender.createMimeMessage();
+			MimeMessageHelper helper=new MimeMessageHelper(message,"utf-8");
+			
+			helper.setTo(to);
+			helper.setSubject(dto.getSubject());
+	        helper.setText(dto.getBody(), true); // HTML 허용
+	        helper.setFrom("sks02040204@gmail.com");
+	        
+	        mailSender.send(message);
+	        System.out.println("✅ 메일 전송 성공: " + to);
+	        
+	     // 전송 완료 후 세션과 임시 저장소 모두 정리
+	        session.removeAttribute("emails");
+	        draftStorage.clearStoredEmails();
+	        System.out.println("🗑️ 세션 및 임시 저장소 정리 완료");
+		}catch(Exception e){
+			 System.err.println("❌ 메일 전송 실패: " + e.getMessage());
+	         throw new RuntimeException("메일 전송 실패");
+		}
 	}
 }
