@@ -24,7 +24,6 @@ public class EmailService {
 	private final LeadService leadService;
 	private final LeadRepository leadRepository;
 	private final JavaMailSender mailSender;
-	private final EmailDraftStorage draftStorage;
 	
 	public List<Email> findAll(){
 		return this.emailRepository.findAll();
@@ -65,7 +64,7 @@ public class EmailService {
 	}
 	
 	//email전송
-	public void sendEmail(EmailDto dto, HttpSession session) {
+	public void sendEmail(EmailDto dto) {
 		String to;
 		if(dto.getContactEmail() != null) {
 			to = dto.getContactEmail();
@@ -86,11 +85,7 @@ public class EmailService {
 	        
 	        mailSender.send(message);
 	        System.out.println("✅ 메일 전송 성공: " + to);
-	        
-	     // 전송 완료 후 세션과 임시 저장소 모두 정리
-	        session.removeAttribute("emails");
-	        draftStorage.clearStoredEmails();
-	        System.out.println("🗑️ 세션 및 임시 저장소 정리 완료");
+	        save(dto);
 		}catch(Exception e){
 			 System.err.println("❌ 메일 전송 실패: " + e.getMessage());
 	         throw new RuntimeException("메일 전송 실패");
