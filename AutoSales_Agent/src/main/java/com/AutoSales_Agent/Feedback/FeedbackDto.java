@@ -15,7 +15,8 @@ public class FeedbackDto {
 	private Integer leadId;
 	private Integer emailId;
 	private String responseSummary;
-	private String responseType; // Enum 문자열 값
+	private String responseType; 
+	private String originalText;
 	private LocalDateTime createdAt;
 
 	// Entity → Dto (응답용)
@@ -25,7 +26,7 @@ public class FeedbackDto {
 		dto.setLeadId(feedback.getLead().getId());
 		dto.setEmailId(feedback.getMail().getId());
 		dto.setResponseSummary(feedback.getResponseSummary());
-		dto.setResponseType(feedback.getResponse_type().name());
+		dto.setResponseType(feedback.getResponsetype());
 		dto.setCreatedAt(feedback.getCreatedAt());
 		return dto;
 	}
@@ -37,7 +38,8 @@ public class FeedbackDto {
 		feedback.setLead(lead);
 		feedback.setMail(email);
 		feedback.setResponseSummary(dto.getResponseSummary());
-		feedback.setResponse_type(Feedback.responseType.valueOf(dto.getResponseType()));
+		feedback.setOriginalText(dto.getOriginalText());
+		feedback.setResponsetype(dto.getResponseType());
 		return feedback;
 	}
 }
