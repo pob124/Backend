@@ -31,8 +31,11 @@ public class FeedbackService {
 	        .orElseThrow(() -> new RuntimeException("Invalid projectId"));
 	    Lead lead = leadRepository.findById(dto.getLeadId())
 	        .orElseThrow(() -> new RuntimeException("Invalid leadId"));
-	    Email email = emailRepository.findById(dto.getEmailId())
-	        .orElseThrow(() -> new RuntimeException("Invalid emailId"));
+	    Email email = null;
+	    if (dto.getEmailId() != null) {
+	        email = emailRepository.findById(dto.getEmailId())
+	            .orElse(null); // 실패해도 진행
+	    }
 
 	    Feedback feedback = FeedbackDto.toEntity(dto, project, lead, email);
 	    return feedbackRepository.save(feedback);

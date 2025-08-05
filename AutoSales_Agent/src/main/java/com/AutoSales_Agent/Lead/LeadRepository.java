@@ -1,6 +1,7 @@
 package com.AutoSales_Agent.Lead;
 
 import java.util.List;
+
 import java.util.Optional;
 
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -14,4 +15,5 @@ public interface LeadRepository extends JpaRepository<Lead,Integer>{
 	Optional<Lead> findByName(String name);
 	Optional<Lead> findById(Integer id);
 	List<Lead> findByIndustry(String industry);
+	Optional<Lead> findByContactEmail(String contactEmail);
 }

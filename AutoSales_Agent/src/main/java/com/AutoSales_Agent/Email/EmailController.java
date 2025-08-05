@@ -1,6 +1,7 @@
 package com.AutoSales_Agent.Email;
 
 import java.util.List;
+import java.util.Map;
 
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.data.redis.core.RedisTemplate;
@@ -107,5 +108,11 @@ public class EmailController {
         stringRedisTemplate.delete("email:draft:session:" + sessionId);
 
         return ResponseEntity.ok("✅ 총 " + successCount + "개 메일 전송 완료 (session: " + sessionId + ")");
+    }
+    
+    @GetMapping("/receive")
+    public ResponseEntity<List<Map<String, String>>> getUnreadEmails() {
+        List<Map<String, String>> unreadEmails = emailService.receiveEmails();
+        return ResponseEntity.ok(unreadEmails);
     }
 }
