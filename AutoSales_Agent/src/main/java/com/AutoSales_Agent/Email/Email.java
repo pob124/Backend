@@ -36,6 +36,9 @@ public class Email {
 	@Column(columnDefinition = "TEXT")
 	private String body;
 	
+	@Column(nullable = false)
+	private boolean sent = false;
+	
 	@Column(updatable = false)
 	@CreationTimestamp
 	private LocalDateTime createdAt;
