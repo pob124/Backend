@@ -8,6 +8,7 @@ import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
 
+import com.AutoSales_Agent.Email.EmailRepository;
 import com.AutoSales_Agent.Lead.Lead;
 import com.AutoSales_Agent.Lead.LeadRepository;
 import com.AutoSales_Agent.ProjectLeadMap.ProjectLeadMap;
@@ -22,6 +23,7 @@ public class ProjectService {
 	private final ProjectRepository projectRepository;
 	private final ProjectLeadMapRepository projectLeadMapRepository;
 	private final LeadRepository leadRepository;
+	private final EmailRepository emailRepository;
 	
 	public List<Project> findAll(){
 		return this.projectRepository.findAll();
@@ -127,5 +129,26 @@ public class ProjectService {
 	            .map(ProjectLeadMap::getProject)
 	            .distinct()
 	            .collect(Collectors.toList());
+	}
+	
+	//feedback분석 용 projectid 검색 메소드
+	public Integer findProjectForFeedback(Integer leadId) {
+		List<Integer> projectIds = this.projectLeadMapRepository.findProjectIdsByLeadId(leadId);
+		
+		if (projectIds == null || projectIds.isEmpty()) {
+	        throw new RuntimeException("해당 리드와 연결된 프로젝트가 없음");
+	    }
+		
+		if (projectIds.size() == 1) {
+	        return projectIds.get(0);
+	    }
+		
+		List<Integer> recentProjectIds = emailRepository.findRecentProjectIdsByLeadId(leadId);
+	    for (Integer projectId : recentProjectIds) {
+	        if (projectIds.contains(projectId)) {
+	            return projectId;
+	        }
+	    }
+	    throw new RuntimeException("해당 리드와 연결된 프로젝트 중 최근 메일 보낸 프로젝트 없음");
 	}
 }
