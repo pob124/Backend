@@ -18,6 +18,8 @@ public class EmailDraftRedisService {
 	private final RedisTemplate<String, EmailDto> emailRedisTemplate;
     private final RedisTemplate<String, String> stringRedisTemplate;
     
+    private static final Duration DRAFT_TTL = Duration.ofHours(6);
+    
     // 생성자에서 @Qualifier 사용
     public EmailDraftRedisService(RedisTemplate<String, EmailDto> emailRedisTemplate,
                                  @Qualifier("customStringRedisTemplate") RedisTemplate<String, String> stringRedisTemplate) {
@@ -31,10 +33,11 @@ public class EmailDraftRedisService {
 
         for (EmailDto email : emails) {
             String uuid = UUID.randomUUID().toString();
-            emailRedisTemplate.opsForValue().set("email:draft:" + uuid, email, Duration.ofHours(6));
+            emailRedisTemplate.opsForValue().set("email:draft:" + uuid, email, DRAFT_TTL);
             stringRedisTemplate.opsForList().rightPush("email:draft:session:" + sessionId, uuid);
+            stringRedisTemplate.opsForValue().set("email:draft:sessionByUuid:" + uuid, sessionId, DRAFT_TTL);
         }
-        stringRedisTemplate.expire("email:draft:session:" + sessionId, Duration.ofHours(6));
+        stringRedisTemplate.expire("email:draft:session:" + sessionId, DRAFT_TTL);
         return sessionId;
     }
 	 
@@ -83,6 +86,17 @@ public class EmailDraftRedisService {
             }
         }
         return null;
+    }
+    
+    // ✅ 세션 리스트에서 uuid 제거(LREM)
+    public long removeFromSession(String sessionId, String uuid) {
+        String sessionKey = "email:draft:session:" + sessionId;
+        return stringRedisTemplate.opsForList().remove(sessionKey, 1, uuid);
+    }
+
+    // ✅ 세션 TTL 갱신(선택)
+    public void touchSessionTtl(String sessionId) {
+        stringRedisTemplate.expire("email:draft:session:" + sessionId, DRAFT_TTL);
     }
 
     public int countDrafts(String sessionId) {

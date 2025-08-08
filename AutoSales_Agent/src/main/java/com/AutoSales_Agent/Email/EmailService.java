@@ -16,6 +16,7 @@ import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.web.util.HtmlUtils;
 
 import com.AutoSales_Agent.Feedback.FeedbackDto;
 import com.AutoSales_Agent.Feedback.FeedbackService;
@@ -96,6 +97,23 @@ public class EmailService {
 	    }
 	}
 	
+	private String renderHtml(String raw) {
+	    // 이미 HTML이면 그대로 보내고, 아니면 안전하게 변환
+	    boolean looksLikeHtml = raw != null && raw.contains("<") && raw.contains(">");
+	    if (looksLikeHtml) return raw;
+
+	    String esc = HtmlUtils.htmlEscape(raw == null ? "" : raw);
+
+	    // 2줄 개행 => 문단, 1줄 개행 => 줄바꿈
+	    String withParas = esc
+	        .replaceAll("\\r?\\n\\r?\\n", "</p><p>")
+	        .replaceAll("\\r?\\n", "<br/>");
+
+	    return "<div style='font-size:14px; line-height:1.7; color:#222'>"
+	         + "<p style='margin:0 0 14px 0'>" + withParas + "</p>"
+	         + "</div>";
+	}
+	
 	//email전송
 	public void sendEmail(EmailDto dto) {
 		String to;
@@ -110,8 +128,11 @@ public class EmailService {
 		try {
 			Email savedEmail = save(dto);
 			Integer emailId = savedEmail.getId();
-			
-			String decoratedBody = "<html><body>" + dto.getBody() + "<!-- emailId:" + emailId + " --></body></html>";
+			String htmlBody = renderHtml(dto.getBody());
+			String decoratedBody =
+		            "<!doctype html><html><head><meta charset='UTF-8'></head><body>"
+		          + htmlBody
+		          + "<!-- emailId:" + emailId + " --></body></html>";
 			System.out.println("보낸 메일: " + decoratedBody);
 			MimeMessage message = mailSender.createMimeMessage();
 	        MimeMessageHelper helper = new MimeMessageHelper(message, "utf-8");
@@ -133,8 +154,8 @@ public class EmailService {
 	}
 	
 	//3시간마다 메일 자동으로 읽어옴.
-	//@Scheduled(cron = "0 0 7,10,13,15,17,18 * * *")
-	@Scheduled(fixedRate =1 * 60 * 1000)
+	@Scheduled(cron = "0 0 7,10,13,15,17,18 * * *")
+	//@Scheduled(fixedRate =1 * 60 * 1000)
 	public void scheduleReceiveEmails() {
 	    System.out.println("[메일 수신]");
 	    receiveEmails();
