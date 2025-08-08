@@ -9,6 +9,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Lob;
 import lombok.Data;
 
 @Data
@@ -20,7 +21,8 @@ public class Project {
 	private Integer id;
 	
 	private String name;
-	
+	@Lob
+	@Column(columnDefinition = "TEXT")
 	private String description;
 	
 	private String industry;

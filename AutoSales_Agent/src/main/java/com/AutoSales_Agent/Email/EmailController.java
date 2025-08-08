@@ -79,8 +79,15 @@ public class EmailController {
         emailRedisTemplate.delete("email:draft:" + uuid);
         
         String sessionId = emailDraftRedisService.findSessionIdByUuid(uuid);
-        if (sessionId != null && emailDraftRedisService.countDrafts(sessionId) == 1) {
-            emailDraftRedisService.deleteDraftsBySession(sessionId);
+        if (sessionId != null) {
+            emailDraftRedisService.removeFromSession(sessionId, uuid);
+
+            // 5) 세션 비었으면 삭제, 아니면 (선택) TTL 갱신
+            if (emailDraftRedisService.countDrafts(sessionId) == 0) {
+                emailDraftRedisService.deleteDraftsBySession(sessionId); // 내부에서 세션 키 삭제 포함
+            } else {
+                emailDraftRedisService.touchSessionTtl(sessionId); // 선택
+            }
         }
         return ResponseEntity.ok("✅ 개별 메일 전송 완료 (uuid: " + uuid + ")");
     }
