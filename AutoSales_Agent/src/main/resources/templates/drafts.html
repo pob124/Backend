@@ -20,6 +20,19 @@
       margin-right: 10px;
       padding: 5px 10px;
     }
+    .feedback-input {
+      border: 1px solid #ddd;
+      padding: 10px;
+      background-color: #f9f9f9;
+      border-radius: 4px;
+    }
+    .feedback-input textarea {
+      width: 100%;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      padding: 8px;
+      font-family: inherit;
+    }
   </style>
 </head>
 <body>
@@ -29,6 +42,8 @@
     <label>Session ID: <input type="text" id="sessionIdInput" style="width: 400px;" /></label>
     <button onclick="loadDrafts()">불러오기</button>
     <button onclick="sendAll()">일괄 전송</button>
+    <button onclick="rewriteSelectedEmails()">선택 재작성</button>
+    <button onclick="checkRedisKeys()">Redis 키 확인</button>
   </div>
 
   <div id="draftList" style="margin-top: 20px;"></div>
@@ -48,17 +63,36 @@
       emails.forEach((item) => {
         const email = item.email;
         const uuid = item.uuid;
+        const isCancelled = item.isCancelled || false;
 
         const card = document.createElement('div');
         card.className = 'email-card';
+        
+        const cardStyle = isCancelled ? 'border-left: 4px solid #ff6b6b; background-color: #fff5f5;' : '';
+        
         card.innerHTML = `
-          <h3>${email.subject}</h3>
-          <p><strong>To:</strong> ${email.contactEmail}</p>
-          <p>${email.body}</p>
-          <div class="email-actions">
-            <button onclick="sendEmail('${uuid}')">보내기</button>
+          <div style="${cardStyle}">
+            <h3>${email.subject}</h3>
+            <p><strong>To:</strong> ${email.contactEmail}</p>
+            ${isCancelled ? '<p style="color: #ff6b6b; font-weight: bold;">⚠️ 취소된 이메일 (재작성 대기 중)</p>' : ''}
+            <p>${email.body}</p>
+            <div class="email-actions">
+              ${!isCancelled ? `<button onclick="sendEmail('${uuid}')">보내기</button>` : ''}
+              <input type="checkbox" class="cancel-checkbox" data-uuid="${uuid}" data-email='${JSON.stringify(email)}' ${isCancelled ? 'disabled' : ''}>
+              <label>재작성 선택</label>
+            </div>
+            <div id="feedback-input-${uuid}" class="feedback-input" style="display: none; margin-top: 10px;">
+              <textarea placeholder="재작성 사유를 입력하세요 (예: 제목이 너무 일반적임, 내용이 구체적이지 않음, 톤이 부적절함 등)" rows="3" style="width: 100%; margin-bottom: 5px;"></textarea>
+            </div>
           </div>
         `;
+        
+        // 이벤트 리스너를 직접 추가
+        const checkbox = card.querySelector('.cancel-checkbox');
+        checkbox.addEventListener('change', function() {
+          toggleFeedbackInput(uuid);
+        });
+        
         list.appendChild(card);
       });
     }
@@ -79,6 +113,155 @@
       if (res.ok) alert('일괄 전송 완료');
       else alert('전송 실패');
     }
+
+    function toggleFeedbackInput(uuid) {
+      console.log('toggleFeedbackInput called with uuid:', uuid);
+      const feedbackDiv = document.getElementById(`feedback-input-${uuid}`);
+      const checkbox = document.querySelector(`input[data-uuid="${uuid}"]`);
+      
+      console.log('feedbackDiv:', feedbackDiv);
+      console.log('checkbox:', checkbox);
+      console.log('checkbox.checked:', checkbox ? checkbox.checked : 'checkbox not found');
+      
+      if (feedbackDiv && checkbox) {
+        if (checkbox.checked) {
+          feedbackDiv.style.display = 'block';
+          console.log('Feedback input shown for uuid:', uuid);
+        } else {
+          feedbackDiv.style.display = 'none';
+          // 피드백 입력값 초기화
+          feedbackDiv.querySelector('textarea').value = '';
+          console.log('Feedback input hidden for uuid:', uuid);
+        }
+      } else {
+        console.error('Elements not found for uuid:', uuid);
+      }
+    }
+
+    async function rewriteSelectedEmails() {
+      const rewriteButton = document.querySelector('button[onclick="rewriteSelectedEmails()"]');
+      if (rewriteButton) {
+        rewriteButton.disabled = true;
+        rewriteButton.textContent = '재작성 중...';
+      }
+      
+      // 재작성 실패 카운터 초기화 (새로운 재작성 시도 시작)
+      try {
+        await fetch('/emails/reset-rewrite-failures', { method: 'POST' });
+        console.log('✅ 재작성 실패 카운터 초기화 완료');
+      } catch (error) {
+        console.log('⚠️ 재작성 실패 카운터 초기화 실패 (무시)', error);
+      }
+      
+      const checkboxes = document.querySelectorAll('.cancel-checkbox:checked');
+      if (checkboxes.length === 0) {
+        alert('재작성할 이메일을 선택하세요');
+        if (rewriteButton) {
+          rewriteButton.disabled = false;
+          rewriteButton.textContent = '선택 재작성';
+        }
+        return;
+      }
+
+      const sessionId = document.getElementById('sessionIdInput').value.trim();
+      if (!sessionId) {
+        alert('Session ID를 입력하세요');
+        return;
+      }
+
+      // 선택된 이메일들의 정보 수집
+      const selectedEmails = [];
+      checkboxes.forEach(checkbox => {
+        const email = JSON.parse(checkbox.dataset.email);
+        const uuid = checkbox.dataset.uuid;
+        const feedbackInput = document.getElementById(`feedback-input-${uuid}`);
+        const feedback = feedbackInput.querySelector('textarea').value.trim();
+        
+        if (!feedback) {
+          alert(`"${email.subject}" 이메일의 재작성 사유를 입력하세요`);
+          return;
+        }
+        
+        selectedEmails.push({ uuid, email, feedback });
+      });
+
+      if (selectedEmails.length === 0) {
+        return;
+      }
+
+      try {
+        // 각 이메일별로 취소 및 재작성 요청
+        let successCount = 0;
+        let totalCount = selectedEmails.length;
+        
+        for (const { uuid, email, feedback } of selectedEmails) {
+          console.log(`🔄 재작성 요청 시작: ${uuid}`);
+          console.log(`📝 피드백: ${feedback}`);
+          
+          try {
+            const res = await fetch(`/emails/cancel/${uuid}`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ cancelReason: feedback })
+            });
+            
+            console.log(`📡 응답 상태: ${res.status} ${res.statusText}`);
+            
+            if (!res.ok) {
+              const errorText = await res.text();
+              console.error(`❌ 이메일 재작성 요청 실패: ${uuid}`, errorText);
+            } else {
+              const successText = await res.text();
+              console.log(`✅ 이메일 재작성 요청 성공: ${uuid}`, successText);
+              successCount++;
+            }
+          } catch (error) {
+            console.error(`❌ 네트워크 오류: ${uuid}`, error);
+          }
+        }
+        
+        if (successCount > 0) {
+          alert(`${successCount}/${totalCount}개의 이메일 재작성 요청이 성공했습니다. 잠시 후 목록이 새로고침됩니다.`);
+          
+          // 체크박스 해제 및 피드백 입력 숨기기
+          checkboxes.forEach(checkbox => {
+            checkbox.checked = false;
+            const uuid = checkbox.dataset.uuid;
+            toggleFeedbackInput(uuid);
+          });
+          
+          // 3초 후 목록 새로고침 (내용 업데이트 방식이므로 cleanup 불필요)
+          setTimeout(async () => {
+            await loadDrafts();
+          }, 3000);
+        } else {
+          alert('재작성 요청이 모두 실패했습니다. 4번 연속 실패 시 자동으로 건너뜁니다.');
+        }
+        
+        // 버튼 상태 복원
+        if (rewriteButton) {
+          rewriteButton.disabled = false;
+          rewriteButton.textContent = '선택 재작성';
+        }
+        
+      } catch (error) {
+        alert('처리 중 오류가 발생했습니다: ' + error.message);
+      }
+    }
+
+    async function checkRedisKeys() {
+      try {
+        const res = await fetch('/emails/debug/redis-keys');
+        const data = await res.json();
+        console.log('🔍 Redis 키 정보:', data);
+        alert(`Redis 키 정보:\nDraft: ${data.draftKeys}개\nCancelled: ${data.cancelledKeys}개\nSession: ${data.sessionKeys}개`);
+      } catch (error) {
+        console.error('Redis 키 확인 실패:', error);
+        alert('Redis 키 확인 실패: ' + error.message);
+      }
+    }
+
+    // cleanupAndReload 함수 제거 (내용 업데이트 방식에서는 불필요)
 
     window.onload = () => {
       const params = new URLSearchParams(window.location.search);

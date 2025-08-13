@@ -50,6 +50,8 @@ public class EmailDraftController {
     public ResponseEntity<List<EmailDraftWithUuid>> getDraftsBySession(
         @RequestParam("sessionId") String sessionId
     ) {
-        return ResponseEntity.ok(emailDraftRedisService.getDrafts(sessionId));
+        // 취소된 이메일도 포함하여 조회
+        return ResponseEntity.ok(emailDraftRedisService.getCancelledEmails(sessionId));
     }
+
 }

@@ -1,4 +1,3 @@
 AutoSales_Agent/src/main/resources/application.properties
 src/main/resources/application.properties
-
-AutoSales_Agent/src/main/resources/application.properties
+AutoSales_Agent/.env

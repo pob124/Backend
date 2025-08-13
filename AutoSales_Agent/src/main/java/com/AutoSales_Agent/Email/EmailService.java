@@ -6,10 +6,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.http.ResponseEntity;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
@@ -51,10 +54,17 @@ public class EmailService {
 	private final ProjectRepository projectRepository;
 	private final FeedbackService feedbackService;
 	private final RestTemplate restTemplate;
+	private final RedisTemplate<String, EmailDto> emailRedisTemplate;
+	private final RedisTemplate<String, String> stringRedisTemplate;
+	private final EmailDraftRedisService emailDraftRedisService;
 	@Value("${spring.mail.username}")	
 	private String mailUsername;
 	@Value("${spring.mail.password}")
 	private String mailPassword;
+	
+	// 재작성 실패 카운터 (UUID별로 관리)
+	private final Map<String, Integer> rewriteFailureCount = new HashMap<>();
+	private static final int MAX_REWRITE_FAILURES = 4;
 
 	
 	public List<Email> findAll(){
@@ -278,6 +288,168 @@ public class EmailService {
 	        System.err.println("❌ Agent 호출 실패: " + e.getMessage());
 	        return null;
 	    }
+	}
+	
+	// 이메일 재작성 요청을 Agent에게 전송하고 결과를 세션에 저장
+	public void requestEmailRewrite(EmailDto emailDto, String cancelReason, String sessionId) {
+	    try {
+	                String agentMessage = String.format(
+            "재작성요청 projectId=%d leadId=%d originalEmail={\"subject\":\"%s\",\"body\":\"%s\"} userFeedback=\"발송 취소 사유: %s\"",
+            emailDto.getProjectId(),
+            emailDto.getLeadId(),
+            emailDto.getSubject().replace("\"", "\\\""),
+            emailDto.getBody().replace("\"", "\\\""),
+            cancelReason != null ? cancelReason.replace("\"", "\\\"") : "사용자가 발송을 취소함"
+        );
+	        
+	        ResponseEntity<Map> response = restTemplate.postForEntity(
+	            "http://localhost:3000/chatbot",
+	            Map.of("message", agentMessage),
+	            Map.class
+	        );
+	        
+	        System.out.println("✅ Agent 재작성 요청 전송 완료: " + agentMessage);
+	        
+	        // Agent 응답에서 재작성된 이메일 정보 추출 및 세션에 저장
+	        if (response.getBody() != null) {
+	            Map<String, Object> agentResponse = response.getBody();
+	            if (agentResponse.containsKey("subject") && agentResponse.containsKey("body")) {
+	                // 재작성된 이메일을 새로운 UUID로 세션에 저장
+	                EmailDto rewrittenEmail = new EmailDto();
+	                rewrittenEmail.setProjectId(emailDto.getProjectId());
+	                rewrittenEmail.setLeadId(emailDto.getLeadId());
+	                rewrittenEmail.setSubject((String) agentResponse.get("subject"));
+	                rewrittenEmail.setBody((String) agentResponse.get("body"));
+	                rewrittenEmail.setContactEmail(emailDto.getContactEmail());
+	                
+	                // 새로운 UUID 생성하여 세션에 저장
+	                String newUuid = java.util.UUID.randomUUID().toString();
+	                emailRedisTemplate.opsForValue().set("email:draft:" + newUuid, rewrittenEmail);
+	                
+	                // 전달받은 세션 ID를 사용하여 같은 세션에 저장
+	                if (sessionId != null) {
+	                    stringRedisTemplate.opsForList().rightPush("email:draft:session:" + sessionId, newUuid);
+	                    System.out.println("✅ 재작성된 이메일을 기존 세션에 저장 완료 (UUID: " + newUuid + ", Session: " + sessionId + ")");
+	                } else {
+	                    // 세션 ID가 없는 경우 새로운 세션 생성
+	                    String newSessionId = java.util.UUID.randomUUID().toString();
+	                    stringRedisTemplate.opsForList().rightPush("email:draft:session:" + newSessionId, newUuid);
+	                    System.out.println("✅ 재작성된 이메일을 새 세션에 저장 완료 (UUID: " + newUuid + ", New Session: " + newSessionId + ")");
+	                }
+	            }
+	        }
+	    } catch (Exception e) {
+	        System.err.println("❌ Agent 재작성 요청 실패: " + e.getMessage());
+	        throw new RuntimeException("Agent 재작성 요청 실패", e);
+	    }
+	}
+	
+	// 이메일 재작성 요청을 Agent에게 전송하고 기존 UUID의 내용을 업데이트
+	public void requestEmailRewriteAndUpdate(EmailDto emailDto, String cancelReason, String uuid) {
+	    try {
+	        // 재작성 실패 횟수 확인
+	        int failureCount = rewriteFailureCount.getOrDefault(uuid, 0);
+	        if (failureCount >= MAX_REWRITE_FAILURES) {
+	            System.out.println("⚠️ 재작성 실패 횟수 초과 (UUID: " + uuid + ", 실패: " + failureCount + "/" + MAX_REWRITE_FAILURES + "회) - 재작성 건너뜀");
+	            System.out.println("💡 프론트엔드에서 '선택 재작성' 버튼을 다시 누르면 실패 카운터가 초기화됩니다.");
+	            return;
+	        }
+	        
+	        // 이미 재작성 중인지 확인 (무한 루프 방지)
+	        if (emailDto.getSubject().contains("[재작성]") || emailDto.getBody().contains("재작성")) {
+	            System.out.println("⚠️ 이미 재작성된 이메일입니다. 재작성 건너뜀");
+	            return;
+	        }
+	        
+	        String agentMessage = String.format(
+	            "재작성요청 projectId=%d leadId=%d originalEmail={\"subject\":\"%s\",\"body\":\"%s\"} userFeedback=\"발송 취소 사유: %s\"",
+	            emailDto.getProjectId(),
+	            emailDto.getLeadId(),
+	            emailDto.getSubject().replace("\"", "\\\""),
+	            emailDto.getBody().replace("\"", "\\\""),
+	            cancelReason != null ? cancelReason.replace("\"", "\\\"") : "사용자가 발송을 취소함"
+	        );
+	        
+	        ResponseEntity<Map> response = restTemplate.postForEntity(
+	            "http://localhost:3000/chatbot",
+	            Map.of("message", agentMessage),
+	            Map.class
+	        );
+	        
+	        System.out.println("✅ Agent 재작성 요청 전송 완료: " + agentMessage);
+	        
+	        // Agent 응답에서 재작성된 이메일 정보 추출 및 기존 UUID 업데이트
+	        if (response.getBody() != null) {
+	            Map<String, Object> agentResponse = response.getBody();
+	            if (agentResponse.containsKey("subject") && agentResponse.containsKey("body")) {
+	                // 기존 UUID의 이메일 내용을 재작성된 내용으로 업데이트
+	                EmailDto rewrittenEmail = new EmailDto();
+	                rewrittenEmail.setProjectId(emailDto.getProjectId());
+	                rewrittenEmail.setLeadId(emailDto.getLeadId());
+	                rewrittenEmail.setSubject("[재작성] " + (String) agentResponse.get("subject"));
+	                rewrittenEmail.setBody((String) agentResponse.get("body"));
+	                rewrittenEmail.setContactEmail(emailDto.getContactEmail());
+	                
+	                // 기존 UUID에 재작성된 내용 저장
+	                emailRedisTemplate.opsForValue().set("email:draft:" + uuid, rewrittenEmail);
+	                
+	                System.out.println("✅ 기존 UUID에 재작성된 이메일 내용 업데이트 완료 (UUID: " + uuid + ")");
+	                // 성공 시 실패 카운터 초기화
+	                rewriteFailureCount.remove(uuid);
+	            } else {
+	                System.err.println("❌ Agent 응답에 subject 또는 body가 없습니다: " + agentResponse);
+	                // 실패 카운터 증가
+	                incrementFailureCount(uuid);
+	            }
+	        } else {
+	            System.err.println("❌ Agent 응답이 null입니다");
+	            // 실패 카운터 증가
+	            incrementFailureCount(uuid);
+	        }
+	    } catch (Exception e) {
+	        System.err.println("❌ Agent 재작성 요청 실패: " + e.getMessage());
+	        // 실패 카운터 증가
+	        incrementFailureCount(uuid);
+	        throw new RuntimeException("Agent 재작성 요청 실패", e);
+	    }
+	}
+	
+	// Lead ID로 세션 ID를 찾는 헬퍼 메서드
+	private String findSessionIdForLead(Integer leadId) {
+	    try {
+	        // 모든 세션 키를 조회
+	        Set<String> sessionKeys = stringRedisTemplate.keys("email:draft:session:*");
+	        if (sessionKeys != null) {
+	            for (String sessionKey : sessionKeys) {
+	                String sessionId = sessionKey.replace("email:draft:session:", "");
+	                List<String> uuids = stringRedisTemplate.opsForList().range(sessionKey, 0, -1);
+	                if (uuids != null) {
+	                    for (String uuid : uuids) {
+	                        EmailDto emailDto = emailRedisTemplate.opsForValue().get("email:draft:" + uuid);
+	                        if (emailDto != null && emailDto.getLeadId().equals(leadId)) {
+	                            return sessionId;
+	                        }
+	                    }
+	                }
+	            }
+	        }
+	    } catch (Exception e) {
+	        System.err.println("❌ 세션 ID 찾기 실패: " + e.getMessage());
+	    }
+	    return null;
+	}
+	
+	// 재작성 실패 카운터 증가
+		private void incrementFailureCount(String uuid) {
+		int currentCount = rewriteFailureCount.getOrDefault(uuid, 0);
+		rewriteFailureCount.put(uuid, currentCount + 1);
+		System.out.println("⚠️ 재작성 실패 카운터 증가 (UUID: " + uuid + ", 실패: " + (currentCount + 1) + "/" + MAX_REWRITE_FAILURES + ")");
+	}
+	
+	// 재작성 실패 카운터 초기화
+	public void resetRewriteFailureCount() {
+		rewriteFailureCount.clear();
+		System.out.println("✅ 재작성 실패 카운터 초기화 완료");
 	}
 	
 	
