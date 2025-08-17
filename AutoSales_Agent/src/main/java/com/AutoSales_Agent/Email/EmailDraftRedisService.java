@@ -28,6 +28,30 @@ public class EmailDraftRedisService {
     }
 	
 	// ✅ 초안 저장 + 세션 키 생성
+    public List<EmailDraftWithUuid> storeDraftsForSession(String sessionId, List<EmailDto> emails) {
+        if (emails == null || emails.isEmpty()) return List.of();
+
+        List<EmailDraftWithUuid> out = new java.util.ArrayList<>();
+        for (EmailDto email : emails) {
+            String uuid = java.util.UUID.randomUUID().toString();
+            String draftKey = "email:draft:" + uuid;
+            String sessionKey = "email:draft:session:" + sessionId;
+
+            // 값은 타입고정 템플릿으로 저장
+            emailRedisTemplate.opsForValue().set(draftKey, email, DRAFT_TTL);
+
+            // 세션 리스트에 uuid 추가
+            stringRedisTemplate.opsForList().rightPush(sessionKey, uuid);
+            stringRedisTemplate.expire(sessionKey, DRAFT_TTL);
+
+            // 역인덱스: uuid -> sessionId
+            stringRedisTemplate.opsForValue()
+                .set("email:draft:sessionByUuid:" + uuid, sessionId, DRAFT_TTL);
+
+            out.add(new EmailDraftWithUuid(uuid, email));
+        }
+        return out;
+    }
     public String storeDrafts(List<EmailDto> emails) {
         String sessionId = UUID.randomUUID().toString();
 
@@ -62,15 +86,18 @@ public class EmailDraftRedisService {
     // ✅ 개별 초안 삭제
     public void deleteSingleDraft(String uuid) {
         emailRedisTemplate.delete("email:draft:" + uuid);
+        stringRedisTemplate.delete("email:draft:sessionByUuid:" + uuid); 	
     }
 
     // ✅ 세션 단위로 전체 초안 삭제
     public void deleteDraftsBySession(String sessionId) {
-        List<String> draftIds = stringRedisTemplate.opsForList().range("email:draft:session:" + sessionId, 0, -1);
+    	String sessionKey = "email:draft:session:" + sessionId;
+        List<String> draftIds = stringRedisTemplate.opsForList().range(sessionKey, 0, -1);
 
         if (draftIds != null) {
             for (String id : draftIds) {
                 emailRedisTemplate.delete("email:draft:" + id);
+                stringRedisTemplate.delete("email:draft:sessionByUuid:" + id);
             }
         }
 
