@@ -22,12 +22,6 @@ public class EmailDraftController {
 	
 	private final EmailDraftRedisService emailDraftRedisService;
 	
-	@PostMapping("/drafts")
-	public ResponseEntity<Map<String, Object>> storeDrafts(@RequestBody List<EmailDto> emails) {
-		String sessionId = emailDraftRedisService.storeDrafts(emails);
-		return ResponseEntity.ok(Map.of("sessionId", sessionId));
-	}
-	
 	/*
 	 * @GetMapping("/drafts") public ResponseEntity<List<EmailDraftWithUuid>>
 	 * getDraftsBySession(@RequestParam("sessionId") String sessionId){ return

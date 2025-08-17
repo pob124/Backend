@@ -77,6 +77,7 @@ public class EmailController {
 
         emailService.sendEmail(emailDto); // 실제 전송 + DB 저장
         emailRedisTemplate.delete("email:draft:" + uuid);
+        emailRedisTemplate.delete("email:draft:sessionByUuid:" + uuid);
         
         String sessionId = emailDraftRedisService.findSessionIdByUuid(uuid);
         if (sessionId != null) {
