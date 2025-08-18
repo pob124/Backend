@@ -10,4 +10,10 @@ public class IndexController {
 	public String index() {
 		return "index";
 	}
+	
+	// ✅ 피드백 리스트 페이지
+	@GetMapping("/feedback-list")
+	public String feedbackList() {
+		return "feedback-list";
+	}
 }

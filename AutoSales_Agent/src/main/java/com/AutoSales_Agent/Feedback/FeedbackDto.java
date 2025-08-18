@@ -18,16 +18,27 @@ public class FeedbackDto {
 	private String responseType; 
 	private String originalText;
 	private LocalDateTime createdAt;
+	
+	// 표시용 필드
+	private String leadName;
+	private String projectName;
 
 	// Entity → Dto (응답용)
 	public static FeedbackDto fromEntity(Feedback feedback) {
 		FeedbackDto dto = new FeedbackDto();
 		dto.setProjectId(feedback.getProject().getId());
 		dto.setLeadId(feedback.getLead().getId());
-		dto.setEmailId(feedback.getMail().getId());
+		// emailId가 null일 수 있으므로 안전하게 처리
+		dto.setEmailId(feedback.getMail() != null ? feedback.getMail().getId() : null);
 		dto.setResponseSummary(feedback.getResponseSummary());
 		dto.setResponseType(feedback.getResponsetype());
+		dto.setOriginalText(feedback.getOriginalText());
 		dto.setCreatedAt(feedback.getCreatedAt());
+		
+		// 표시용 필드 설정
+		dto.setLeadName(feedback.getLead().getName());
+		dto.setProjectName(feedback.getProject().getName());
+		
 		return dto;
 	}
 

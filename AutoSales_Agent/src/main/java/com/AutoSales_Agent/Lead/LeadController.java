@@ -2,6 +2,7 @@ package com.AutoSales_Agent.Lead;
 
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -56,6 +57,25 @@ public class LeadController {
 	    return ResponseEntity.ok(leads);
 	}
 
+	@GetMapping("/")
+	public ResponseEntity<List<LeadDto>> getAllLeads() {
+		List<Lead> leads = leadService.findAll();
+		List<LeadDto> leadDtos = leads.stream()
+			.map(LeadDto::fromEntity)
+			.collect(Collectors.toList());
+		return ResponseEntity.ok(leadDtos);
+	}
+
+	// 중복 이메일 삭제 엔드포인트
+	@DeleteMapping("/duplicates")
+	public ResponseEntity<String> removeDuplicateEmails() {
+		try {
+			int deletedCount = leadService.removeDuplicateEmails();
+			return ResponseEntity.ok("중복 이메일 삭제 완료: " + deletedCount + "개 삭제됨");
+		} catch (Exception e) {
+			return ResponseEntity.status(500).body("중복 이메일 삭제 실패: " + e.getMessage());
+		}
+	}
 	
 	@PostMapping("")
 	public ResponseEntity<Lead> createLead(@RequestBody LeadDto leadDto) {

@@ -18,6 +18,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.client.RestTemplate;
 
 @RestController
 @RequestMapping("/emails")
@@ -27,16 +28,19 @@ public class EmailController {
 	private final RedisTemplate<String, EmailDto> emailRedisTemplate;
     private final RedisTemplate<String, String> stringRedisTemplate;
     private final EmailDraftRedisService emailDraftRedisService;
+    private final RestTemplate restTemplate;
     
  // 생성자에서 @Qualifier 사용
  	public EmailController(EmailService emailService, 
  	                      RedisTemplate<String, EmailDto> emailRedisTemplate,
  	                      @Qualifier("customStringRedisTemplate") RedisTemplate<String, String> stringRedisTemplate,
- 	                     EmailDraftRedisService emailDraftRedisService) {
+ 	                     EmailDraftRedisService emailDraftRedisService,
+ 	                     RestTemplate restTemplate) {
  		this.emailService = emailService;
  		this.emailRedisTemplate = emailRedisTemplate;
  		this.stringRedisTemplate = stringRedisTemplate;
  		this.emailDraftRedisService=emailDraftRedisService;
+ 		this.restTemplate = restTemplate;
  	}
 	
 	@GetMapping("")
@@ -182,6 +186,38 @@ public class EmailController {
         return ResponseEntity.ok("✅ 총 " + successCount + "개 메일 전송 완료 (session: " + sessionId + ")");
     }
     
+    // ✅ Follow-up Email 생성
+    @PostMapping("/followup")
+    public ResponseEntity<String> generateFollowupEmail(@RequestBody Map<String, Object> request) {
+        try {
+            String sessionId = emailService.generateFollowupEmail(request);
+            return ResponseEntity.ok("후속 이메일 생성 완료 - Session ID: " + sessionId);
+        } catch (Exception e) {
+            return ResponseEntity.status(500).body("후속 이메일 생성 실패: " + e.getMessage());
+        }
+    }
+
+	// 수동 이메일 수신 테스트 엔드포인트 추가
+	@PostMapping("/receive-test")
+	public ResponseEntity<String> testReceiveEmails() {
+		try {
+			List<Map<String, String>> results = emailService.receiveEmails();
+			return ResponseEntity.ok("이메일 수신 테스트 완료. 처리된 메일 수: " + results.size());
+		} catch (Exception e) {
+			return ResponseEntity.status(500).body("이메일 수신 테스트 실패: " + e.getMessage());
+		}
+	}
+
+	// 특정 발신자 이메일만 처리하는 테스트 엔드포인트
+	@PostMapping("/receive-test-specific")
+	public ResponseEntity<String> testReceiveSpecificEmails() {
+		try {
+			List<Map<String, String>> results = emailService.receiveSpecificEmails("telnosgia@gmail.com");
+			return ResponseEntity.ok("특정 발신자 이메일 수신 테스트 완료. 처리된 메일 수: " + results.size());
+		} catch (Exception e) {
+			return ResponseEntity.status(500).body("특정 발신자 이메일 수신 테스트 실패: " + e.getMessage());
+		}
+	}
 
 
     @GetMapping("/receive")

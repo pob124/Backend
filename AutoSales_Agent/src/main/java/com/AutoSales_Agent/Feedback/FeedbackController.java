@@ -7,6 +7,8 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import java.util.List;
+import java.util.stream.Collectors;
 
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -29,5 +31,35 @@ public class FeedbackController {
 	public ResponseEntity<FeedbackDto> saveFeedback(@RequestBody @Valid FeedbackDto dto) {
 	    Feedback saved = feedbackService.saveFeedback(dto);
 	    return ResponseEntity.ok(FeedbackDto.fromEntity(saved));
+	}
+	
+	// ✅ 최근 피드백 리스트 조회
+	@GetMapping("/list")
+	public ResponseEntity<List<FeedbackDto>> getRecentFeedbacks() {
+	    List<Feedback> feedbacks = feedbackService.getRecentFeedbacks();
+	    List<FeedbackDto> dtoList = feedbacks.stream()
+	        .map(FeedbackDto::fromEntity)
+	        .collect(Collectors.toList());
+	    return ResponseEntity.ok(dtoList);
+	}
+	
+	// ✅ 프로젝트별 피드백 리스트 조회
+	@GetMapping("/list/project/{projectId}")
+	public ResponseEntity<List<FeedbackDto>> getFeedbacksByProject(@PathVariable Integer projectId) {
+	    List<Feedback> feedbacks = feedbackService.getFeedbacksByProject(projectId);
+	    List<FeedbackDto> dtoList = feedbacks.stream()
+	        .map(FeedbackDto::fromEntity)
+	        .collect(Collectors.toList());
+	    return ResponseEntity.ok(dtoList);
+	}
+	
+	// ✅ 리드별 피드백 리스트 조회
+	@GetMapping("/list/lead/{leadId}")
+	public ResponseEntity<List<FeedbackDto>> getFeedbacksByLead(@PathVariable Integer leadId) {
+	    List<Feedback> feedbacks = feedbackService.getFeedbacksByLead(leadId);
+	    List<FeedbackDto> dtoList = feedbacks.stream()
+	        .map(FeedbackDto::fromEntity)
+	        .collect(Collectors.toList());
+	    return ResponseEntity.ok(dtoList);
 	}
 }
