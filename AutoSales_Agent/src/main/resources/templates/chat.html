@@ -7,7 +7,13 @@
   <style>
     :root{ --bg:#0f1216; --panel:#151a21; --text:#e6e8eb; --muted:#8a94a6; --acc:#4ea8ff; }
     *{ box-sizing:border-box }
-    body{ margin:0; background:var(--bg); color:var(--text); font:15px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif }
+    body{ 
+    
+    margin:0; 
+    background:var(--bg); 
+    color:var(--text); 
+    font:15px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif 
+    }
     .wrap{ max-width:980px; margin:0 auto; height:100dvh; display:flex; flex-direction:column; padding:16px }
     header{ display:flex; gap:8px; align-items:center; margin-bottom:12px }
     header h1{ font-size:16px; margin:0; color:var(--acc) }
@@ -37,6 +43,7 @@
     <h1>Agent Chat</h1>
     <span id="status" class="muted"></span>
     <span style="margin-left:auto" class="muted">Enter=Send, Shift+Enter=줄바꿈</span>
+    <a href="/feedback-list">후속 메일 작성</a>
   </header>
 
   <div id="chat" aria-live="polite"></div>
@@ -49,7 +56,7 @@
 
 <div id="toast"></div>
 
-<script>
+<script th:inline="none">
   // ===== 기본 준비 =====
   const chat = document.getElementById('chat');
   const q = document.getElementById('q');
@@ -86,27 +93,112 @@
   }
 
   function addDraftCard(parentBubble, d){
-    const card = document.createElement('div');
-    card.className = 'draft-card';
-    card.innerHTML = `
-      <div class="head">초안 생성됨</div>
-      <div class="to">To: ${escapeHtml(d.to||'')}</div>
-      <div class="head">${escapeHtml(d.subject||'')}</div>
-      <div class="body">${renderMarkdownLite(d.snippet||'')}</div>
-      <div style="display:flex;gap:8px">
-        <button class="btn" data-id="${d.uuid}">보내기</button>
-      </div>
-    `;
-    const btn = card.querySelector('button');
-    btn.addEventListener('click', async ()=>{
-      btn.disabled = true;
-      try{
-        const r = await fetch(`/emails/send/${encodeURIComponent(d.uuid)}`, { method:'POST' });
-        if(!r.ok) throw 0; btn.textContent='보냄'; btn.style.opacity=.6; toast('메일 전송 완료');
-      }catch{ btn.disabled=false; toast('전송 실패'); }
-    });
-    parentBubble.appendChild(card);
-  }
+	    const card = document.createElement('div');
+	    card.className = 'draft-card';
+
+	    // 상태 플래그(서버가 내려주면 반영, 없으면 false)
+	    const isCancelled = !!d.isCancelled;
+
+	    card.innerHTML = `
+	      <div class="head">초안 생성됨 ${isCancelled ? '<span style="color:#ff6b6b">· 취소됨(재작성 대기)</span>' : ''}</div>
+	      <div class="to">To: ${escapeHtml(d.to ?? d.contactEmail ?? '')}</div>
+	      <div class="head subject-line">${escapeHtml(d.subject ?? '')}</div>
+	      <div class="body body-markdown">${renderMarkdownLite(d.body ?? d.snippet ?? '')}</div>
+
+	      <div class="rewrite-wrap" style="display:${isCancelled?'block':'none'}; margin:6px 0 8px 0">
+	        <textarea class="rewrite-feedback" rows="3" placeholder="재작성 사유 (예: 제목이 밋밋함 / 톤을 더 공손하게 / 길이를 30% 축약)" style="width:100%; background:#0d1117; color:#e6e8eb; border:1px solid #202633; border-radius:8px; padding:8px"></textarea>
+	        <div style="display:flex; gap:8px; margin-top:6px">
+	          <button class="btn rewrite-send">재작성 요청</button>
+	          <button class="btn rewrite-cancel" style="opacity:.8">취소</button>
+	        </div>
+	      </div>
+
+	      <div style="display:flex; gap:8px">
+	        <button class="btn send-btn" ${isCancelled?'disabled style="opacity:.6"':''} data-id="${d.uuid}">보내기</button>
+	        <button class="btn rewrite-btn" ${isCancelled?'':'style="opacity:.95"'}>${isCancelled?'재작성 사유 입력':'재작성'}</button>
+	      </div>
+	    `;
+
+	    // 버튼 바인딩
+	    const sendBtn = card.querySelector('.send-btn');
+	    const rewriteBtn = card.querySelector('.rewrite-btn');
+	    const rwWrap = card.querySelector('.rewrite-wrap');
+	    const rwSend = card.querySelector('.rewrite-send');
+	    const rwCancel = card.querySelector('.rewrite-cancel');
+	    const rwText = card.querySelector('.rewrite-feedback');
+
+	    // 보내기
+	    sendBtn?.addEventListener('click', async ()=>{
+	      const uuid = sendBtn.getAttribute('data-id');
+	      sendBtn.disabled = true;
+	      try{
+	        const r = await fetch(`/emails/send/${encodeURIComponent(uuid)}`, { method:'POST' });
+	        if(!r.ok) throw 0;
+	        sendBtn.textContent='보냄';
+	        sendBtn.style.opacity=.6;
+	        toast('메일 전송 완료');
+	      }catch{
+	        sendBtn.disabled=false;
+	        toast('전송 실패');
+	      }
+	    });
+
+	    // 재작성 토글
+	    rewriteBtn?.addEventListener('click', ()=>{
+	      // 토글 표시
+	      rwWrap.style.display = (rwWrap.style.display==='none' || !rwWrap.style.display) ? 'block' : 'none';
+	      if (rwWrap.style.display==='block' && !rwText.value) {
+	        // 초기에 혹시 서버가 취소 상태로 내려줬다면 안내 프리셋
+	        rwText.placeholder = rwText.placeholder || '재작성 사유를 입력하세요';
+	      }
+	    });
+
+	    // 재작성 요청
+	    rwSend?.addEventListener('click', async ()=>{
+	      const feedback = (rwText.value||'').trim();
+	      if(!feedback){ toast('재작성 사유를 입력하세요'); return; }
+	      rwSend.disabled = true;
+
+	      try{
+	        const r = await fetch(`/emails/cancel/${encodeURIComponent(d.uuid)}`, {
+	          method:'POST',
+	          headers:{'Content-Type':'application/json'},
+	          body: JSON.stringify({ cancelReason: feedback })
+	        });
+	        if(!r.ok){
+	          const t = await r.text();
+	          throw new Error(t||'HTTP '+r.status);
+	        }
+	        // UI 업데이트: 취소 상태로 표시하고 보내기 비활성화
+	        toast('재작성 요청 완료: 초안이 취소됨(재작성 대기)');
+	        const headEl = card.querySelector('.head');
+	        if (headEl && !headEl.innerHTML.includes('취소됨')) {
+	          headEl.innerHTML += ' <span style="color:#ff6b6b">· 취소됨(재작성 대기)</span>';
+	        }
+	        sendBtn.disabled = true;
+	        sendBtn.style.opacity = .6;
+	        rewriteBtn.textContent = '재작성 사유 입력';
+	        rwWrap.style.display = 'none';
+	        rwText.value = '';
+	        
+	        startRewritePolling(d.uuid, card);
+	      }catch(e){
+	        rwSend.disabled=false;
+	        toast('재작성 요청 실패');
+	        console.error(e);
+	      }finally{
+	        rwSend.disabled=false;
+	      }
+	    });
+
+	    // 재작성 입력 닫기
+	    rwCancel?.addEventListener('click', ()=>{
+	      rwWrap.style.display='none';
+	      rwText.value='';
+	    });
+
+	    parentBubble.appendChild(card);
+	  }
 
   // ===== 히스토리 로드 (Redis 저장물 표시) =====
   async function loadHistory(){
@@ -167,6 +259,52 @@
 
   // 초기 히스토리
   loadHistory();
+  
+  async function fetchDraft(uuid){
+	  const r = await fetch(`/emails/draft/${encodeURIComponent(uuid)}`);
+	  if(!r.ok) throw new Error('not found');
+	  return r.json(); // {uuid, subject, body, contactEmail, isCancelled}
+	}
+
+	// ② 재작성 후, 같은 uuid가 갱신될 때까지 짧게 폴링
+	function startRewritePolling(uuid, card, { interval = 1500, timeout = 90000 } = {}) {
+  const t0 = Date.now();
+  const subjectEl = card.querySelector('.subject-line');
+  const bodyEl = card.querySelector('.body-markdown');
+
+  const timer = setInterval(async () => {
+    try {
+      const d = await fetchDraft(uuid);
+      const newSubject = d.subject || '';
+      const newBodyHTML = renderMarkdownLite(d.body || '');
+
+      const subjectChanged = subjectEl && subjectEl.textContent !== newSubject;
+      const bodyChanged = bodyEl && bodyEl.innerHTML !== newBodyHTML;
+      const cancelCleared = d.isCancelled === false;
+
+      if (subjectChanged || bodyChanged || cancelCleared) {
+        if (subjectEl) subjectEl.textContent = newSubject;
+        if (bodyEl) bodyEl.innerHTML = newBodyHTML;
+
+        // "취소됨" 뱃지 제거
+        const badge = card.querySelector('.head span');
+        if (badge) badge.remove();
+
+        // 재작성 완료되면 보내기 버튼 활성화
+        const sendBtnEl = card.querySelector('.send-btn');
+        if (sendBtnEl) { sendBtnEl.disabled = false; sendBtnEl.style.opacity = 1; }
+
+        clearInterval(timer);
+      }
+
+      if (Date.now() - t0 > timeout) {
+        clearInterval(timer);
+      }
+    } catch {
+      // 일시 오류는 다음 틱에서 재시도
+    }
+  }, interval);
+}
 </script>
 </body>
 </html>

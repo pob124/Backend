@@ -27,7 +27,7 @@ public class EmailDraftRedisService {
         this.stringRedisTemplate = stringRedisTemplate;
     }
 	
-	// ✅ 초안 저장 + 세션 키 생성
+	// 초안 저장 + 세션 키 생성
     public List<EmailDraftWithUuid> storeDraftsForSession(String sessionId, List<EmailDto> emails) {
         if (emails == null || emails.isEmpty()) return List.of();
 
@@ -45,8 +45,8 @@ public class EmailDraftRedisService {
             stringRedisTemplate.expire(sessionKey, DRAFT_TTL);
 
             // 역인덱스: uuid -> sessionId
-            stringRedisTemplate.opsForValue()
-                .set("email:draft:sessionByUuid:" + uuid, sessionId, DRAFT_TTL);
+            //stringRedisTemplate.opsForValue()
+                //.set("email:draft:sessionByUuid:" + uuid, sessionId, DRAFT_TTL);
 
             out.add(new EmailDraftWithUuid(uuid, email));
         }
@@ -59,7 +59,7 @@ public class EmailDraftRedisService {
             String uuid = UUID.randomUUID().toString();
             emailRedisTemplate.opsForValue().set("email:draft:" + uuid, email, DRAFT_TTL);
             stringRedisTemplate.opsForList().rightPush("email:draft:session:" + sessionId, uuid);
-            stringRedisTemplate.opsForValue().set("email:draft:sessionByUuid:" + uuid, sessionId, DRAFT_TTL);
+            //stringRedisTemplate.opsForValue().set("email:draft:sessionByUuid:" + uuid, sessionId, DRAFT_TTL);
         }
         stringRedisTemplate.expire("email:draft:session:" + sessionId, DRAFT_TTL);
         return sessionId;
@@ -129,5 +129,46 @@ public class EmailDraftRedisService {
     public int countDrafts(String sessionId) {
         Long size = stringRedisTemplate.opsForList().size("email:draft:session:" + sessionId);
         return size == null ? 0 : size.intValue();
+    }
+    
+    public String findSessionIdByLeadId(Integer leadId) {
+        Set<String> keys = stringRedisTemplate.keys("email:draft:session:*");
+        for (String key : keys) {
+            List<String> uuids = stringRedisTemplate.opsForList().range(key, 0, -1);
+            if (uuids != null) {
+                for (String uuid : uuids) {
+                    EmailDto emailDto = emailRedisTemplate.opsForValue().get("email:draft:" + uuid);
+                    if (emailDto != null && emailDto.getLeadId().equals(leadId)) {
+                        return key.replace("email:draft:session:", "");
+                    }
+                }
+            }
+        }
+        return null;
+    }
+    
+ // ✅ 취소된 이메일 조회
+    public List<EmailDraftWithUuid> getCancelledEmails(String sessionId) {
+        List<String> draftIds = stringRedisTemplate.opsForList()
+                .range("email:draft:session:" + sessionId, 0, -1);
+
+        if (draftIds == null) 
+            return Collections.emptyList();
+
+        return draftIds.stream()
+                .map(id -> {
+                    // 먼저 draft에서 찾고, 없으면 cancelled에서 찾기
+                    EmailDto dto = emailRedisTemplate.opsForValue().get("email:draft:" + id);
+                    boolean isCancelled = false;
+                    
+                    if (dto == null) {
+                        dto = emailRedisTemplate.opsForValue().get("email:cancelled:" + id);
+                        isCancelled = true;
+                    }
+                    
+                    return dto != null ? new EmailDraftWithUuid(id, dto, isCancelled) : null;
+                })
+                .filter(Objects::nonNull)
+                .collect(Collectors.toList());
     }
 }

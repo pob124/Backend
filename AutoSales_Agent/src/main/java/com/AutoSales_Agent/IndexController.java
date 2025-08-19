@@ -12,6 +12,11 @@ public class IndexController {
 	}
 	@GetMapping("/chat")
 	  public String chat() {
-	    return "forward:/chat.html"; // static/chat.html
-	  }
+	    return "chat";
+	}
+	
+	@GetMapping("/feedback-list")
+	public String feedbackList() {
+		return "feedback-list";
+	}
 }

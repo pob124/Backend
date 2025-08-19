@@ -18,6 +18,8 @@ public class FeedbackDto {
 	private String responseType; 
 	private String originalText;
 	private LocalDateTime createdAt;
+	private String leadName;
+	private String projectName;
 
 	// Entity → Dto (응답용)
 	public static FeedbackDto fromEntity(Feedback feedback) {
@@ -27,7 +29,10 @@ public class FeedbackDto {
 		dto.setEmailId(feedback.getMail().getId());
 		dto.setResponseSummary(feedback.getResponseSummary());
 		dto.setResponseType(feedback.getResponsetype());
+		dto.setOriginalText(feedback.getOriginalText());
 		dto.setCreatedAt(feedback.getCreatedAt());
+		dto.setLeadName(feedback.getLead().getName());
+		dto.setProjectName(feedback.getProject().getName());
 		return dto;
 	}
 

@@ -1,4 +1,4 @@
-package com.AutoSales_Agent;
+package com.AutoSales_Agent.Agent;
 
 import java.util.List;
 
@@ -19,7 +19,6 @@ public class AgentService{
         this.http = RestClient.builder().baseUrl(baseUrl).build();
     }
 
-    /** TS 에이전트의 /agent/handle 호출 (동기) */
     public Result call(String sid, String prompt) {
         return http.post()
                 .uri("/agent/handle")
@@ -34,8 +33,8 @@ public class AgentService{
 
     @Data 
     public static class Result {
-        private String intent;         // 선택
-        private String text;           // 어시스턴트 텍스트
+        private String intent;         
+        private String text;           
         private List<EmailDto> drafts; // 초안들(없을 수 있음) — EmailDto 그대로 받음
     }
 }
