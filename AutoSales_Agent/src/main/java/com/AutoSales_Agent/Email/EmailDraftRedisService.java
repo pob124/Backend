@@ -12,7 +12,10 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 
+import lombok.RequiredArgsConstructor;
+
 @Service
+@RequiredArgsConstructor
 public class EmailDraftRedisService {
 	
 	private final RedisTemplate<String, EmailDto> emailRedisTemplate;
@@ -20,13 +23,6 @@ public class EmailDraftRedisService {
     
     private static final Duration DRAFT_TTL = Duration.ofHours(6);
     
-    // 생성자에서 @Qualifier 사용
-    public EmailDraftRedisService(RedisTemplate<String, EmailDto> emailRedisTemplate,
-                                 @Qualifier("customStringRedisTemplate") RedisTemplate<String, String> stringRedisTemplate) {
-        this.emailRedisTemplate = emailRedisTemplate;
-        this.stringRedisTemplate = stringRedisTemplate;
-    }
-	
 	// 초안 저장 + 세션 키 생성
     public List<EmailDraftWithUuid> storeDraftsForSession(String sessionId, List<EmailDto> emails) {
         if (emails == null || emails.isEmpty()) return List.of();
