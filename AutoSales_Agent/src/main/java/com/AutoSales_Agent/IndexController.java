@@ -10,8 +10,11 @@ public class IndexController {
 	public String index() {
 		return "index";
 	}
+	@GetMapping("/chat")
+	  public String chat() {
+	    return "chat";
+	}
 	
-	// ✅ 피드백 리스트 페이지
 	@GetMapping("/feedback-list")
 	public String feedbackList() {
 		return "feedback-list";

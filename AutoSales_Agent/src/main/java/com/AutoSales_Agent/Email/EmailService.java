@@ -1,6 +1,7 @@
 package com.AutoSales_Agent.Email;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -22,6 +23,7 @@ import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.web.util.HtmlUtils;
 
 import com.AutoSales_Agent.Feedback.FeedbackDto;
 import com.AutoSales_Agent.Feedback.FeedbackService;
@@ -44,8 +46,8 @@ import jakarta.mail.Session;
 import jakarta.mail.Store;
 import jakarta.mail.internet.InternetAddress;
 import jakarta.mail.internet.MimeMessage;
-import jakarta.mail.search.FlagTerm;
 import jakarta.mail.search.AndTerm;
+import jakarta.mail.search.FlagTerm;
 import jakarta.mail.search.FromStringTerm;
 import jakarta.mail.search.SearchTerm;
 import lombok.RequiredArgsConstructor;
@@ -115,6 +117,23 @@ public class EmailService {
 	    }
 	}
 	
+	private String renderHtml(String raw) {
+	    // 이미 HTML이면 그대로 보내고, 아니면 안전하게 변환
+	    boolean looksLikeHtml = raw != null && raw.contains("<") && raw.contains(">");
+	    if (looksLikeHtml) return raw;
+
+	    String esc = HtmlUtils.htmlEscape(raw == null ? "" : raw);
+
+	    // 2줄 개행 => 문단, 1줄 개행 => 줄바꿈
+	    String withParas = esc
+	        .replaceAll("\\r?\\n\\r?\\n", "</p><p>")
+	        .replaceAll("\\r?\\n", "<br/>");
+
+	    return "<div style='font-size:14px; line-height:1.7; color:#222'>"
+	         + "<p style='margin:0 0 14px 0'>" + withParas + "</p>"
+	         + "</div>";
+	}
+	
 	//email전송
 	public void sendEmail(EmailDto dto) {
 		String to;
@@ -129,8 +148,11 @@ public class EmailService {
 		try {
 			Email savedEmail = save(dto);
 			Integer emailId = savedEmail.getId();
-			
-			String decoratedBody = "<html><body>" + dto.getBody() + "<!-- emailId:" + emailId + " --></body></html>";
+			String htmlBody = renderHtml(dto.getBody());
+			String decoratedBody =
+		            "<!doctype html><html><head><meta charset='UTF-8'></head><body>"
+		          + htmlBody
+		          + "<!-- emailId:" + emailId + " --></body></html>";
 			System.out.println("보낸 메일: " + decoratedBody);
 			MimeMessage message = mailSender.createMimeMessage();
 	        MimeMessageHelper helper = new MimeMessageHelper(message, "utf-8");
@@ -256,19 +278,9 @@ public class EmailService {
                 }
 
                 String senderEmail = ((InternetAddress) froms[0]).getAddress();
-                System.out.println("📬 발신자 이메일: " + senderEmail);
                 
-                // Lead DB에 등록되지 않은 이메일은 건너뜀
-                if (!registeredEmails.contains(senderEmail)) {
-                    System.out.println("⏭️ Lead DB에 등록되지 않은 이메일 건너뜀: " + senderEmail);
-                    skippedCount++;
-                    continue;
-                }
-                
-                // 💡 이메일로 리드 조회
-                List<Lead> leads = leadRepository.findAllByContactEmail(senderEmail);
-                if (leads.isEmpty()) {
-                    System.out.println("❌ Lead DB에서 찾을 수 없는 이메일: " + senderEmail);
+                Optional<Lead> optionalLead = leadRepository.findByContactEmail(senderEmail);
+                if (optionalLead.isEmpty()) 
                 	continue;
                 }
                 
@@ -552,6 +564,176 @@ public class EmailService {
                     FeedbackDto dto = new FeedbackDto();
                     dto.setLeadId(leadId);
                     dto.setProjectId(projectId);
+                    dto.setEmailId(emailId); // 아직 메일 연동 안 됐으면 null
+                    dto.setOriginalText(body);
+                    dto.setResponseSummary(summary);
+                    dto.setResponseType(responseType);
+
+                    feedbackService.saveFeedback(dto);
+                    System.out.println("✅ 분석 결과 저장 완료: " + summary + " (" + responseType + ")");
+                }
+                
+                message.setFlag(Flags.Flag.SEEN, true); // 읽음 처리(지금은 아님 테스트용)
+
+                
+                System.out.println("From: " + senderEmail);
+                System.out.println("Lead: " + leadName);
+                System.out.println("Project: " + projectName);
+                System.out.println("Subject: " + subject);
+                System.out.println("Body: " + body);
+                System.out.println("------");
+            }
+
+            inbox.close(false);
+            store.close();
+
+        } catch (Exception e) {
+            System.err.println("메일 수신 중 오류 발생:");
+            e.printStackTrace();
+        }
+
+        return result;
+    }
+	
+	public List<Map<String, String>> receiveSpecificEmails(String targetEmail) {
+		List<Map<String, String>> result = new ArrayList<>();
+		String host = "imap.gmail.com";
+		
+		System.out.println("🔍 특정 발신자 이메일 수신 시작 - 계정: " + mailUsername + ", 대상: " + targetEmail);
+		
+		Properties props = new Properties();
+        props.put("mail.store.protocol", "imaps");
+        
+        try {
+        	Session session = Session.getInstance(props);
+        	Store store = session.getStore();
+        	System.out.println("🔗 IMAP 연결 시도: " + host);
+        	store.connect(host, mailUsername, mailPassword);
+        	System.out.println("✅ IMAP 연결 성공");
+        	
+        	Folder inbox = store.getFolder("INBOX");
+        	inbox.open(Folder.READ_WRITE);
+        	
+        	// 특정 발신자로부터 온 읽지 않은 메일만 검색
+        	SearchTerm searchTerm = new AndTerm(
+        		new FlagTerm(new Flags(Flags.Flag.SEEN), false),
+        		new FromStringTerm(targetEmail)
+        	);
+        	
+            Message[] messages = inbox.search(searchTerm);
+            System.out.println("읽지 않은 메일 수 (" + targetEmail + "): " + messages.length);
+            
+            if (messages.length == 0) {
+                System.out.println("📭 해당 발신자로부터 읽지 않은 메일이 없습니다.");
+                inbox.close(false);
+                store.close();
+                return result;
+            }
+            
+            // 최근 메일부터 처리
+            Arrays.sort(messages, (m1, m2) -> {
+                try {
+                    return m2.getReceivedDate().compareTo(m1.getReceivedDate());
+                } catch (Exception e) {
+                    return 0;
+                }
+            });
+            
+            for (Message message : messages) {
+                Address[] froms = message.getFrom();
+                
+                if (froms == null || froms.length == 0) {
+                    System.out.println("⚠️ 발신자 정보가 없는 메일 건너뜀");
+                	continue;
+                }
+
+                String senderEmail = ((InternetAddress) froms[0]).getAddress();
+                System.out.println("📬 발신자 이메일: " + senderEmail);
+                
+                // 💡 이메일로 리드 조회
+                List<Lead> leads = leadRepository.findAllByContactEmail(senderEmail);
+                if (leads.isEmpty()) {
+                    System.out.println("❌ Lead DB에서 찾을 수 없는 이메일: " + senderEmail);
+                	continue;
+                }
+                
+                // 중복된 경우 첫 번째 Lead 사용
+                Lead lead = leads.get(0);
+                if (leads.size() > 1) {
+                    System.out.println("⚠️ 중복된 이메일 발견: " + senderEmail + " (" + leads.size() + "개) - 첫 번째 사용");
+                }
+                
+                Integer leadId = lead.getId();
+                String leadName = lead.getName();
+                System.out.println("✅ Lead 찾음: " + leadName + " (ID: " + leadId + ")");
+
+                // 프로젝트 관련 변수들을 블록 밖에서 선언
+                Integer projectId = null;
+                Project project = null;
+                String projectName = "Unknown";
+
+                try {
+                    projectId = this.projectService.findProjectForFeedback(leadId);
+                    System.out.println("✅ 프로젝트 ID 찾음: " + projectId);
+                    
+                    project = projectRepository.findById(projectId).orElse(null);
+                    projectName = projectRepository.findById(projectId)
+                                        .map(Project::getName)
+                                        .orElse("Unknown");
+                    System.out.println("✅ 프로젝트 이름: " + projectName);
+                } catch (Exception e) {
+                    System.err.println("❌ 프로젝트 조회 실패: " + e.getMessage());
+                    continue;
+                }
+
+                String subject = message.getSubject();
+                String body = "";
+
+                Object content = message.getContent();
+                if (content instanceof String str) {
+                    body = str;
+                } 
+                else if (content instanceof Multipart multipart) {
+                    for (int i = 0; i < multipart.getCount(); i++) {
+                        BodyPart part = multipart.getBodyPart(i);
+                        if (part.isMimeType("text/plain")) {
+                            body = part.getContent().toString();
+                            break;
+                        }
+                    }
+                }
+                
+                Integer emailId = null;
+                Matcher bodyMatcher = Pattern.compile("<!--\\s*emailId\\s*:\\s*(\\d+)\\s*-->").matcher(body);
+                if (bodyMatcher.find()) {
+                    emailId = Integer.parseInt(bodyMatcher.group(1));
+                }
+                
+                if (emailId == null) {
+                    Matcher subjectMatcher = Pattern.compile("\\[emailId:(\\d+)]").matcher(subject);
+                    if (subjectMatcher.find()) {
+                        emailId = Integer.parseInt(subjectMatcher.group(1));
+                    }
+                }
+                
+                Email email = null;
+                if (emailId != null) {
+                    email = emailRepository.findById(emailId).orElse(null);
+                }
+                
+                Map<String, String> agentResult = callAgentForFeedbackSummary(
+                        leadName, projectName, subject, body
+                    );
+                
+                if (agentResult != null && project != null) {
+                	System.out.println("🧠 Agent 응답: " + agentResult);
+                	
+                    String summary = agentResult.get("summary");
+                    String responseType = agentResult.get("responseType");
+
+                    FeedbackDto dto = new FeedbackDto();
+                    dto.setLeadId(leadId);
+                    dto.setProjectId(projectId);
                     dto.setEmailId(emailId);
                     dto.setOriginalText(body);
                     dto.setResponseSummary(summary);
@@ -581,9 +763,8 @@ public class EmailService {
             System.err.println("❌ 특정 발신자 메일 수신 중 오류 발생:");
             e.printStackTrace();
         }
-
         return result;
-    }
+	}
 	
 	public Map<String, String> callAgentForFeedbackSummary(String leadName, String projectName, String subject, String body) {
 	    try {
@@ -601,22 +782,25 @@ public class EmailService {
 
 	        return response.getBody();
 	    } catch (Exception e) {
-	        System.err.println("❌ Agent 호출 실패: " + e.getMessage());
+	        System.err.println("Agent 호출 실패: " + e.getMessage());
 	        return null;
 	    }
 	}
 	
+	
+	
+	
 	// 이메일 재작성 요청을 Agent에게 전송하고 결과를 세션에 저장
 	public void requestEmailRewrite(EmailDto emailDto, String cancelReason, String sessionId) {
 	    try {
-	                String agentMessage = String.format(
-            "재작성요청 projectId=%d leadId=%d originalEmail={\"subject\":\"%s\",\"body\":\"%s\"} userFeedback=\"발송 취소 사유: %s\"",
-            emailDto.getProjectId(),
-            emailDto.getLeadId(),
-            emailDto.getSubject().replace("\"", "\\\""),
-            emailDto.getBody().replace("\"", "\\\""),
-            cancelReason != null ? cancelReason.replace("\"", "\\\"") : "사용자가 발송을 취소함"
-        );
+	        String agentMessage = String.format(
+	        		"재작성요청 projectId=%d leadId=%d originalEmail={\"subject\":\"%s\",\"body\":\"%s\"} userFeedback=\"발송 취소 사유: %s\"",
+	            emailDto.getProjectId(),
+	            emailDto.getLeadId(),
+	            emailDto.getSubject().replace("\"", "\\\""),
+	            emailDto.getBody().replace("\"", "\\\""),
+	            cancelReason != null ? cancelReason.replace("\"", "\\\"") : "사용자가 발송을 취소함"
+	            	);
 	        
 	        ResponseEntity<Map> response = restTemplate.postForEntity(
 	            "http://localhost:3000/chatbot",
@@ -645,12 +829,12 @@ public class EmailService {
 	                // 전달받은 세션 ID를 사용하여 같은 세션에 저장
 	                if (sessionId != null) {
 	                    stringRedisTemplate.opsForList().rightPush("email:draft:session:" + sessionId, newUuid);
-	                    System.out.println("✅ 재작성된 이메일을 기존 세션에 저장 완료 (UUID: " + newUuid + ", Session: " + sessionId + ")");
+	                    System.out.println("재작성된 이메일을 기존 세션에 저장 완료 (UUID: " + newUuid + ", Session: " + sessionId + ")");
 	                } else {
 	                    // 세션 ID가 없는 경우 새로운 세션 생성
 	                    String newSessionId = java.util.UUID.randomUUID().toString();
 	                    stringRedisTemplate.opsForList().rightPush("email:draft:session:" + newSessionId, newUuid);
-	                    System.out.println("✅ 재작성된 이메일을 새 세션에 저장 완료 (UUID: " + newUuid + ", New Session: " + newSessionId + ")");
+	                    System.out.println("재작성된 이메일을 새 세션에 저장 완료 (UUID: " + newUuid + ", New Session: " + newSessionId + ")");
 	                }
 	            }
 	        }
@@ -768,7 +952,8 @@ public class EmailService {
 		System.out.println("✅ 재작성 실패 카운터 초기화 완료");
 	}
 	
-	// Follow-up Email 생성 메서드
+	
+	//Follow-up Email 생성 메서드
 	public String generateFollowupEmail(Map<String, Object> request) {
 		System.out.println("🔄 Follow-up Email 생성 요청 받음");
 		System.out.println("📝 요청 본문: " + request);
@@ -835,6 +1020,4 @@ public class EmailService {
 			throw new RuntimeException("Follow-up Email 생성 실패: " + e.getMessage(), e);
 		}
 	}
-	
-	
 }

@@ -12,29 +12,52 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 
+import lombok.RequiredArgsConstructor;
+
 @Service
+@RequiredArgsConstructor
 public class EmailDraftRedisService {
 	
 	private final RedisTemplate<String, EmailDto> emailRedisTemplate;
     private final RedisTemplate<String, String> stringRedisTemplate;
     
-    // 생성자에서 @Qualifier 사용
-    public EmailDraftRedisService(RedisTemplate<String, EmailDto> emailRedisTemplate,
-                                 @Qualifier("customStringRedisTemplate") RedisTemplate<String, String> stringRedisTemplate) {
-        this.emailRedisTemplate = emailRedisTemplate;
-        this.stringRedisTemplate = stringRedisTemplate;
+    private static final Duration DRAFT_TTL = Duration.ofHours(6);
+    
+	// 초안 저장 + 세션 키 생성
+    public List<EmailDraftWithUuid> storeDraftsForSession(String sessionId, List<EmailDto> emails) {
+        if (emails == null || emails.isEmpty()) return List.of();
+
+        List<EmailDraftWithUuid> out = new java.util.ArrayList<>();
+        for (EmailDto email : emails) {
+            String uuid = java.util.UUID.randomUUID().toString();
+            String draftKey = "email:draft:" + uuid;
+            String sessionKey = "email:draft:session:" + sessionId;
+
+            // 값은 타입고정 템플릿으로 저장
+            emailRedisTemplate.opsForValue().set(draftKey, email, DRAFT_TTL);
+
+            // 세션 리스트에 uuid 추가
+            stringRedisTemplate.opsForList().rightPush(sessionKey, uuid);
+            stringRedisTemplate.expire(sessionKey, DRAFT_TTL);
+
+            // 역인덱스: uuid -> sessionId
+            //stringRedisTemplate.opsForValue()
+                //.set("email:draft:sessionByUuid:" + uuid, sessionId, DRAFT_TTL);
+
+            out.add(new EmailDraftWithUuid(uuid, email));
+        }
+        return out;
     }
-	
-	// ✅ 초안 저장 + 세션 키 생성
     public String storeDrafts(List<EmailDto> emails) {
         String sessionId = UUID.randomUUID().toString();
 
         for (EmailDto email : emails) {
             String uuid = UUID.randomUUID().toString();
-            emailRedisTemplate.opsForValue().set("email:draft:" + uuid, email, Duration.ofHours(6));
+            emailRedisTemplate.opsForValue().set("email:draft:" + uuid, email, DRAFT_TTL);
             stringRedisTemplate.opsForList().rightPush("email:draft:session:" + sessionId, uuid);
+            //stringRedisTemplate.opsForValue().set("email:draft:sessionByUuid:" + uuid, sessionId, DRAFT_TTL);
         }
-        stringRedisTemplate.expire("email:draft:session:" + sessionId, Duration.ofHours(6));
+        stringRedisTemplate.expire("email:draft:session:" + sessionId, DRAFT_TTL);
         return sessionId;
     }
 	 
@@ -59,15 +82,18 @@ public class EmailDraftRedisService {
     // ✅ 개별 초안 삭제
     public void deleteSingleDraft(String uuid) {
         emailRedisTemplate.delete("email:draft:" + uuid);
+        stringRedisTemplate.delete("email:draft:sessionByUuid:" + uuid); 	
     }
 
     // ✅ 세션 단위로 전체 초안 삭제
     public void deleteDraftsBySession(String sessionId) {
-        List<String> draftIds = stringRedisTemplate.opsForList().range("email:draft:session:" + sessionId, 0, -1);
+    	String sessionKey = "email:draft:session:" + sessionId;
+        List<String> draftIds = stringRedisTemplate.opsForList().range(sessionKey, 0, -1);
 
         if (draftIds != null) {
             for (String id : draftIds) {
                 emailRedisTemplate.delete("email:draft:" + id);
+                stringRedisTemplate.delete("email:draft:sessionByUuid:" + id);
             }
         }
 
@@ -85,7 +111,22 @@ public class EmailDraftRedisService {
         return null;
     }
     
-    // ✅ Lead ID로 세션 ID 찾기
+    // ✅ 세션 리스트에서 uuid 제거(LREM)
+    public long removeFromSession(String sessionId, String uuid) {
+        String sessionKey = "email:draft:session:" + sessionId;
+        return stringRedisTemplate.opsForList().remove(sessionKey, 1, uuid);
+    }
+
+    // ✅ 세션 TTL 갱신(선택)
+    public void touchSessionTtl(String sessionId) {
+        stringRedisTemplate.expire("email:draft:session:" + sessionId, DRAFT_TTL);
+    }
+
+    public int countDrafts(String sessionId) {
+        Long size = stringRedisTemplate.opsForList().size("email:draft:session:" + sessionId);
+        return size == null ? 0 : size.intValue();
+    }
+    
     public String findSessionIdByLeadId(Integer leadId) {
         Set<String> keys = stringRedisTemplate.keys("email:draft:session:*");
         for (String key : keys) {
@@ -101,13 +142,8 @@ public class EmailDraftRedisService {
         }
         return null;
     }
-
-    public int countDrafts(String sessionId) {
-        Long size = stringRedisTemplate.opsForList().size("email:draft:session:" + sessionId);
-        return size == null ? 0 : size.intValue();
-    }
     
-    // ✅ 취소된 이메일 조회
+ // ✅ 취소된 이메일 조회
     public List<EmailDraftWithUuid> getCancelledEmails(String sessionId) {
         List<String> draftIds = stringRedisTemplate.opsForList()
                 .range("email:draft:session:" + sessionId, 0, -1);

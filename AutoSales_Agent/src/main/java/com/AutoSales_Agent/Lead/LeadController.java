@@ -56,7 +56,7 @@ public class LeadController {
 	    List<Lead> leads = leadService.getLeadsByProjectId(projectId);
 	    return ResponseEntity.ok(leads);
 	}
-
+	
 	@GetMapping("/")
 	public ResponseEntity<List<LeadDto>> getAllLeads() {
 		List<Lead> leads = leadService.findAll();
@@ -66,16 +66,6 @@ public class LeadController {
 		return ResponseEntity.ok(leadDtos);
 	}
 
-	// 중복 이메일 삭제 엔드포인트
-	@DeleteMapping("/duplicates")
-	public ResponseEntity<String> removeDuplicateEmails() {
-		try {
-			int deletedCount = leadService.removeDuplicateEmails();
-			return ResponseEntity.ok("중복 이메일 삭제 완료: " + deletedCount + "개 삭제됨");
-		} catch (Exception e) {
-			return ResponseEntity.status(500).body("중복 이메일 삭제 실패: " + e.getMessage());
-		}
-	}
 	
 	@PostMapping("")
 	public ResponseEntity<Lead> createLead(@RequestBody LeadDto leadDto) {
@@ -97,4 +87,5 @@ public class LeadController {
 		Lead deleted=this.leadService.delete(id);
 		return ResponseEntity.ok(deleted);
 	}
+	
 }

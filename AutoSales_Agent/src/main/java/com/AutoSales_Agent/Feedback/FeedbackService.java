@@ -1,6 +1,7 @@
 package com.AutoSales_Agent.Feedback;
 
 import java.util.List;
+import java.util.List;
 import java.util.Optional;
 
 import org.springframework.stereotype.Service;
@@ -42,17 +43,17 @@ public class FeedbackService {
 	    return feedbackRepository.save(feedback);
 	}
 	
-	// ✅ 최근 피드백 리스트 조회 (최신 50개)
+	//최근 피드백 리스트 조회 (최신 50개)
 	public List<Feedback> getRecentFeedbacks() {
 	    return feedbackRepository.findTop50ByOrderByCreatedAtDesc();
 	}
 	
-	// ✅ 프로젝트별 피드백 리스트 조회
+	//프로젝트별 피드백 리스트 조회
 	public List<Feedback> getFeedbacksByProject(Integer projectId) {
 	    return feedbackRepository.findByProject_IdOrderByCreatedAtDesc(projectId);
 	}
 	
-	// ✅ 리드별 피드백 리스트 조회
+	//리드별 피드백 리스트 조회
 	public List<Feedback> getFeedbacksByLead(Integer leadId) {
 	    return feedbackRepository.findByLead_IdOrderByCreatedAtDesc(leadId);
 	}

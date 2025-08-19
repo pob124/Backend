@@ -20,8 +20,11 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.client.RestTemplate;
 
+import lombok.RequiredArgsConstructor;
+
 @RestController
 @RequestMapping("/emails")
+@RequiredArgsConstructor
 public class EmailController {
 
 	private final EmailService emailService;
@@ -30,19 +33,6 @@ public class EmailController {
     private final EmailDraftRedisService emailDraftRedisService;
     private final RestTemplate restTemplate;
     
- // 생성자에서 @Qualifier 사용
- 	public EmailController(EmailService emailService, 
- 	                      RedisTemplate<String, EmailDto> emailRedisTemplate,
- 	                      @Qualifier("customStringRedisTemplate") RedisTemplate<String, String> stringRedisTemplate,
- 	                     EmailDraftRedisService emailDraftRedisService,
- 	                     RestTemplate restTemplate) {
- 		this.emailService = emailService;
- 		this.emailRedisTemplate = emailRedisTemplate;
- 		this.stringRedisTemplate = stringRedisTemplate;
- 		this.emailDraftRedisService=emailDraftRedisService;
- 		this.restTemplate = restTemplate;
- 	}
-	
 	@GetMapping("")
 	public ResponseEntity<List<Email>> findEmails(
 			@RequestParam(value = "projectId", required = false) Integer projectId,
@@ -75,7 +65,7 @@ public class EmailController {
 		return ResponseEntity.ok(email);
 	}
 	
-	// ✅ 개별 발송
+	// 개별 발송
     @PostMapping("/send/{uuid}")
     public ResponseEntity<String> sendSingleEmail(@PathVariable("uuid") String uuid) {
         EmailDto emailDto = emailRedisTemplate.opsForValue().get("email:draft:" + uuid);
@@ -86,15 +76,25 @@ public class EmailController {
 
         emailService.sendEmail(emailDto); // 실제 전송 + DB 저장
         emailRedisTemplate.delete("email:draft:" + uuid);
+        emailRedisTemplate.delete("email:draft:sessionByUuid:" + uuid);
         
         String sessionId = emailDraftRedisService.findSessionIdByUuid(uuid);
-        if (sessionId != null && emailDraftRedisService.countDrafts(sessionId) == 1) {
-            emailDraftRedisService.deleteDraftsBySession(sessionId);
+        if (sessionId != null) {
+            emailDraftRedisService.removeFromSession(sessionId, uuid);
+
+            // 5) 세션 비었으면 삭제, 아니면 (선택) TTL 갱신
+            if (emailDraftRedisService.countDrafts(sessionId) == 0) {
+                emailDraftRedisService.deleteDraftsBySession(sessionId); // 내부에서 세션 키 삭제 포함
+            } else {
+                emailDraftRedisService.touchSessionTtl(sessionId); // 선택
+            }
         }
         return ResponseEntity.ok("✅ 개별 메일 전송 완료 (uuid: " + uuid + ")");
     }
     
-    // ✅ 발송 취소 기능 (내용 업데이트 방식)
+    
+    
+    //발송 취소 기능 (내용 업데이트 방식)
     @PostMapping("/cancel/{uuid}")
     public ResponseEntity<String> cancelEmail(@PathVariable("uuid") String uuid, @RequestBody Map<String, String> request) {
         System.out.println("🔄 발송 취소 요청 받음 - UUID: " + uuid);
@@ -125,7 +125,7 @@ public class EmailController {
         }
     }
     
-    // ✅ Agent에서 재작성된 이메일을 세션에 저장
+    //Agent에서 재작성된 이메일을 세션에 저장
     @PostMapping("/save-to-session")
     public ResponseEntity<String> saveEmailToSession(@RequestBody EmailDto emailDto) {
         System.out.println("🔄 Agent에서 재작성된 이메일 세션 저장 요청: " + emailDto);
@@ -161,7 +161,9 @@ public class EmailController {
         }
     }
     
-    // ✅ 일괄 발송
+    
+    
+    //일괄 발송
     @PostMapping("/send")
     public ResponseEntity<String> sendAllEmails(@RequestParam("sessionId") String sessionId) {
         List<String> draftIds = stringRedisTemplate.opsForList().range("email:draft:session:" + sessionId, 0, -1);
@@ -226,30 +228,8 @@ public class EmailController {
         return ResponseEntity.ok(unreadEmails);
     }
     
-    // ✅ 디버깅용: Redis 키 확인
-    @GetMapping("/debug/redis-keys")
-    public ResponseEntity<Map<String, Object>> getRedisKeys() {
-        Map<String, Object> result = new HashMap<>();
-        
-        // 모든 draft 키 조회
-        Set<String> draftKeys = emailRedisTemplate.keys("email:draft:*");
-        result.put("draftKeys", draftKeys != null ? draftKeys.size() : 0);
-        result.put("draftKeyList", draftKeys);
-        
-        // 모든 cancelled 키 조회
-        Set<String> cancelledKeys = emailRedisTemplate.keys("email:cancelled:*");
-        result.put("cancelledKeys", cancelledKeys != null ? cancelledKeys.size() : 0);
-        result.put("cancelledKeyList", cancelledKeys);
-        
-        // 모든 session 키 조회
-        Set<String> sessionKeys = stringRedisTemplate.keys("email:draft:session:*");
-        result.put("sessionKeys", sessionKeys != null ? sessionKeys.size() : 0);
-        result.put("sessionKeyList", sessionKeys);
-        
-        return ResponseEntity.ok(result);
-    }
     
-    // ✅ 세션의 취소된 이메일들 삭제
+    //세션의 취소된 이메일들 삭제
     @DeleteMapping("/cleanup-cancelled/{sessionId}")
     public ResponseEntity<String> cleanupCancelledEmails(@PathVariable("sessionId") String sessionId) {
         System.out.println("🧹 세션 " + sessionId + "의 취소된 이메일 정리 시작");
@@ -280,5 +260,55 @@ public class EmailController {
         }
     }
     
+    
+    @GetMapping("/draft/{uuid}")
+    public ResponseEntity<Map<String, Object>> getDraft(@PathVariable("uuid") String uuid) {
+        EmailDto dto = emailRedisTemplate.opsForValue().get("email:draft:" + uuid);
+        if (dto == null) return ResponseEntity.notFound().build();
 
+        // 취소 상태를 별도 키로 관리한다면 여기서 읽어서 내려줘도 됨
+        boolean isCancelled = false; // 필요 시 실제 값으로 대체
+
+        return ResponseEntity.ok(Map.of(
+            "uuid", uuid,
+            "subject", dto.getSubject(),
+            "body", dto.getBody(),
+            "contactEmail", dto.getContactEmail(),
+            "isCancelled", isCancelled,
+            "lastUpdated", System.currentTimeMillis()
+        ));
+    }
+    
+    //Follow-up Email 생성
+    @PostMapping("/followup")
+    public ResponseEntity<String> generateFollowupEmail(@RequestBody Map<String, Object> request) {
+        try {
+            String sessionId = emailService.generateFollowupEmail(request);
+            return ResponseEntity.ok("후속 이메일 생성 완료 - Session ID: " + sessionId);
+        } catch (Exception e) {
+            return ResponseEntity.status(500).body("후속 이메일 생성 실패: " + e.getMessage());
+        }
+    }
+
+	// 수동 이메일 수신 테스트 엔드포인트 추가
+	@PostMapping("/receive-test")
+	public ResponseEntity<String> testReceiveEmails() {
+		try {
+			List<Map<String, String>> results = emailService.receiveEmails();
+			return ResponseEntity.ok("이메일 수신 테스트 완료. 처리된 메일 수: " + results.size());
+		} catch (Exception e) {
+			return ResponseEntity.status(500).body("이메일 수신 테스트 실패: " + e.getMessage());
+		}
+	}
+
+	// 특정 발신자 이메일만 처리하는 테스트 엔드포인트
+	@PostMapping("/receive-test-specific")
+	public ResponseEntity<String> testReceiveSpecificEmails() {
+		try {
+			List<Map<String, String>> results = emailService.receiveSpecificEmails("telnosgia@gmail.com");
+			return ResponseEntity.ok("특정 발신자 이메일 수신 테스트 완료. 처리된 메일 수: " + results.size());
+		} catch (Exception e) {
+			return ResponseEntity.status(500).body("특정 발신자 이메일 수신 테스트 실패: " + e.getMessage());
+		}
+	}
 }

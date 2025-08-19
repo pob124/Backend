@@ -19,6 +19,7 @@ public class LeadDto {
     @JsonProperty("size")
     private String size;
 
+    
     // Entity → Dto 변환 메서드
     public static LeadDto fromEntity(Lead lead) {
         LeadDto dto = new LeadDto();

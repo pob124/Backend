@@ -18,8 +18,6 @@ public class FeedbackDto {
 	private String responseType; 
 	private String originalText;
 	private LocalDateTime createdAt;
-	
-	// 표시용 필드
 	private String leadName;
 	private String projectName;
 
@@ -34,11 +32,8 @@ public class FeedbackDto {
 		dto.setResponseType(feedback.getResponsetype());
 		dto.setOriginalText(feedback.getOriginalText());
 		dto.setCreatedAt(feedback.getCreatedAt());
-		
-		// 표시용 필드 설정
 		dto.setLeadName(feedback.getLead().getName());
 		dto.setProjectName(feedback.getProject().getName());
-		
 		return dto;
 	}
 

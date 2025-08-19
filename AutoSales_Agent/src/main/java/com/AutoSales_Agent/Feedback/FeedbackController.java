@@ -1,5 +1,8 @@
 package com.AutoSales_Agent.Feedback;
 
+import java.util.List;
+import java.util.stream.Collectors;
+
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -33,7 +36,7 @@ public class FeedbackController {
 	    return ResponseEntity.ok(FeedbackDto.fromEntity(saved));
 	}
 	
-	// ✅ 최근 피드백 리스트 조회
+	//최근 피드백 리스트 조회
 	@GetMapping("/list")
 	public ResponseEntity<List<FeedbackDto>> getRecentFeedbacks() {
 	    List<Feedback> feedbacks = feedbackService.getRecentFeedbacks();
@@ -43,7 +46,7 @@ public class FeedbackController {
 	    return ResponseEntity.ok(dtoList);
 	}
 	
-	// ✅ 프로젝트별 피드백 리스트 조회
+	//프로젝트별 피드백 리스트 조회
 	@GetMapping("/list/project/{projectId}")
 	public ResponseEntity<List<FeedbackDto>> getFeedbacksByProject(@PathVariable Integer projectId) {
 	    List<Feedback> feedbacks = feedbackService.getFeedbacksByProject(projectId);
@@ -53,7 +56,7 @@ public class FeedbackController {
 	    return ResponseEntity.ok(dtoList);
 	}
 	
-	// ✅ 리드별 피드백 리스트 조회
+	//리드별 피드백 리스트 조회
 	@GetMapping("/list/lead/{leadId}")
 	public ResponseEntity<List<FeedbackDto>> getFeedbacksByLead(@PathVariable Integer leadId) {
 	    List<Feedback> feedbacks = feedbackService.getFeedbacksByLead(leadId);

@@ -214,6 +214,10 @@
             color: #666;
             text-transform: uppercase;
         }
+        
+        .a{
+        	padding:1000px;
+        }
     </style>
 </head>
 <body>
@@ -255,6 +259,7 @@
             </select>
             
             <button class="refresh-btn" onclick="loadFeedbacks()">🔄 새로고침</button>
+             <a class="refresh-btn" href="/chat">채팅창</a>
         </div>
         
         <div id="feedbackList" class="feedback-list">
@@ -418,14 +423,14 @@
             const feedback = allFeedbacks.find(f => f.id === feedbackId);
             if (feedback) {
                 alert(`
-📧 피드백 상세 정보
-
-고객: ${feedback.leadName || 'Unknown'}
-프로젝트: ${feedback.projectName || 'Unknown'}
-응답 유형: ${feedback.responseType}
-요약: ${feedback.responseSummary || '요약 없음'}
-원본 메일: ${feedback.originalText || '원본 없음'}
-생성일: ${new Date(feedback.createdAt).toLocaleString('ko-KR')}
+			📧 피드백 상세 정보
+			
+			고객: ${feedback.leadName || 'Unknown'}
+			프로젝트: ${feedback.projectName || 'Unknown'}
+			응답 유형: ${feedback.responseType}
+			요약: ${feedback.responseSummary || '요약 없음'}
+			원본 메일: ${feedback.originalText || '원본 없음'}
+			생성일: ${new Date(feedback.createdAt).toLocaleString('ko-KR')}
                 `);
             }
         }

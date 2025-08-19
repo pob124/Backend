@@ -2,6 +2,7 @@ package com.AutoSales_Agent;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Primary;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.serializer.GenericJackson2JsonRedisSerializer;
@@ -15,7 +16,7 @@ import com.fasterxml.jackson.databind.jsontype.impl.LaissezFaireSubTypeValidator
 @Configuration
 public class RedisConfig {
 
-    // ✅ EmailDto용
+    //EmailDto용
     @Bean
     public RedisTemplate<String, EmailDto> emailRedisTemplate(RedisConnectionFactory connectionFactory) {
         RedisTemplate<String, EmailDto> template = new RedisTemplate<>();
@@ -37,8 +38,9 @@ public class RedisConfig {
         return template;
     }
 
-    // ✅ UUID 저장용 (Bean 이름 변경)
+    //UUID 저장용 (Bean 이름 변경)
     @Bean(name = "customStringRedisTemplate")
+    @Primary
     public RedisTemplate<String, String> customStringRedisTemplate(RedisConnectionFactory connectionFactory) {
         RedisTemplate<String, String> template = new RedisTemplate<>();
         template.setConnectionFactory(connectionFactory);
