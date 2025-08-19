@@ -17,4 +17,7 @@ public interface FeedbackRepository extends JpaRepository<Feedback,Integer>{
 	
 	List<Feedback> findByLead_IdAndProject_IdAndOriginalTextAndCreatedAtAfter(
 			Integer leadId, Integer projectId, String originalText, java.time.LocalDateTime after);
+	
+	// 같은 리드의 같은 원본 텍스트가 이미 저장되어 있는지 확인
+	boolean existsByLead_IdAndOriginalText(Integer leadId, String originalText);
 }

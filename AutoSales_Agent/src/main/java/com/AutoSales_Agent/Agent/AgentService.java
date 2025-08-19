@@ -20,11 +20,14 @@ public class AgentService{
     }
 
     public Result call(String sid, String prompt) {
-        return http.post()
+        System.out.println("🔍 AgentService.call 호출됨 - sid: " + sid + ", prompt: " + prompt);
+        Result result = http.post()
                 .uri("/agent/handle")
                 .body(new Req(sid, prompt))
                 .retrieve()
                 .body(Result.class);
+        System.out.println("🔍 AgentService.call 결과: " + result);
+        return result;
     }
 
     @Data static class Req { 

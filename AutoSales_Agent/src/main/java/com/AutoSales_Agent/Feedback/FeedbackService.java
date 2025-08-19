@@ -57,4 +57,9 @@ public class FeedbackService {
 	public List<Feedback> getFeedbacksByLead(Integer leadId) {
 	    return feedbackRepository.findByLead_IdOrderByCreatedAtDesc(leadId);
 	}
+	
+	// 같은 리드의 같은 원본 텍스트가 이미 저장되어 있는지 확인
+	public boolean existsByLeadIdAndOriginalText(Integer leadId, String originalText) {
+	    return feedbackRepository.existsByLead_IdAndOriginalText(leadId, originalText);
+	}
 }

@@ -8,7 +8,7 @@ public class IndexController {
 
 	@GetMapping("/")
 	public String index() {
-		return "index";
+		return "redirect:/chat";
 	}
 	@GetMapping("/chat")
 	  public String chat() {
