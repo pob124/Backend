@@ -2,6 +2,7 @@ package com.AutoSales_Agent.Lead;
 
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -55,6 +56,15 @@ public class LeadController {
 	    List<Lead> leads = leadService.getLeadsByProjectId(projectId);
 	    return ResponseEntity.ok(leads);
 	}
+	
+	@GetMapping("/")
+	public ResponseEntity<List<LeadDto>> getAllLeads() {
+		List<Lead> leads = leadService.findAll();
+		List<LeadDto> leadDtos = leads.stream()
+			.map(LeadDto::fromEntity)
+			.collect(Collectors.toList());
+		return ResponseEntity.ok(leadDtos);
+	}
 
 	
 	@PostMapping("")
@@ -77,4 +87,5 @@ public class LeadController {
 		Lead deleted=this.leadService.delete(id);
 		return ResponseEntity.ok(deleted);
 	}
+	
 }

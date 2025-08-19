@@ -1,6 +1,7 @@
-package com.AutoSales_Agent;
+package com.AutoSales_Agent.Agent;
 
 import java.util.List;
+
 import lombok.*;
 
 @Data

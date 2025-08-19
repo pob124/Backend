@@ -1,4 +1,4 @@
-package com.AutoSales_Agent;
+package com.AutoSales_Agent.Agent;
 
 import java.util.List;
 import java.util.Map;
@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.AutoSales_Agent.Agent.AgentService.Result;
 import com.AutoSales_Agent.Email.EmailDraftRedisService;
 import com.AutoSales_Agent.Email.EmailDraftWithUuid;
 
@@ -33,7 +34,7 @@ public class AgentController {
                 .body(Map.of("type","ERROR","message","sid/q required"));
         }
 
-        var result = agentService.call(req.getSid(), req.getQ()); // TS 호출
+        var result = agentService.call(req.getSid(), req.getQ()); 
 
         List<EmailDraftWithUuid> saved = draftService.storeDraftsForSession(
             req.getSid(), Optional.ofNullable(result.getDrafts()).orElseGet(List::of)

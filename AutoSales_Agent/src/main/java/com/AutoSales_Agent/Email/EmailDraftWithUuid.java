@@ -8,4 +8,11 @@ import lombok.Data;
 public class EmailDraftWithUuid {
 	private String uuid;
     private EmailDto email;
+    private boolean isCancelled;
+    
+    public EmailDraftWithUuid(String uuid, EmailDto email) {
+        this.uuid = uuid;
+        this.email = email;
+        this.isCancelled = false;
+    }
 }
